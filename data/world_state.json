@@ -1,0 +1,63 @@
+{
+  "version": "1.0",
+  "time": {
+    "day": 1,
+    "hour": 8,
+    "minute": 40,
+    "tick": 4
+  },
+  "weather": {
+    "north": "Clear",
+    "south": "Clear",
+    "east": "LightSnow",
+    "west": "Clear"
+  },
+  "player": {
+    "position": {
+      "row": 7,
+      "col": 5
+    },
+    "facing": "North",
+    "room": null,
+    "health": 100.0,
+    "warmth": 44.8415,
+    "energy": 97.0,
+    "mood": 72.0,
+    "skills": {
+      "woodcutting": 10,
+      "fire_making": 10,
+      "observation": 10,
+      "foraging": 10
+    },
+    "inventory": {
+      "slots": [],
+      "max_weight": 50.0
+    }
+  },
+  "cabin": {
+    "door_open": true,
+    "fireplace": {
+      "state": "Cold",
+      "fuel": 0.0
+    },
+    "items": [
+      "Matchbox",
+      "Kindling",
+      "Kindling",
+      "OldBook",
+      "StrangeCompass",
+      "AncientMap",
+      "TeaCup",
+      "WoolBlanket"
+    ]
+  },
+  "wood_shed": {
+    "logs": 6,
+    "firewood": 0,
+    "axe_on_floor": true,
+    "chopping_block": {
+      "has_log": false
+    }
+  },
+  "wildlife": []
+}
