@@ -113,6 +113,13 @@ pushd npm >/dev/null
 PUBLISH_LOG=$(mktemp)
 TEMP_NPMRC=$(mktemp)
 
+if [[ -z "${NPM_TOKEN:-}" ]]; then
+  if ! npm whoami >/dev/null 2>&1; then
+    echo "No NPM_TOKEN and not logged in; running npm login --auth-type=web once..."
+    npm login --auth-type=web
+  fi
+fi
+
 if [[ -n "${NPM_TOKEN:-}" ]]; then
   {
     echo "//registry.npmjs.org/:_authToken=${NPM_TOKEN}"
@@ -136,9 +143,13 @@ else
       echo "npm publish requires an OTP even with NPM_TOKEN; aborting." >&2
       exit 1
     fi
-    echo "npm publish requires an OTP. Attempting npm login --auth-type=web then retry..."
-    npm login --auth-type=web
-    npm publish --access public $OTP_ARG
+    if [[ -n "${NPM_OTP:-}" ]]; then
+      echo "Retrying npm publish with provided NPM_OTP..."
+      npm publish --access public --otp="$NPM_OTP"
+    else
+      echo "npm publish requires an OTP. Set NPM_OTP=<code> or provide NPM_TOKEN and rerun." >&2
+      exit 1
+    fi
   else
     cat "$PUBLISH_LOG" >&2
     exit 1
