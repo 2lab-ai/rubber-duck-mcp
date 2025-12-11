@@ -111,6 +111,7 @@ fi
 
 pushd npm >/dev/null
 PUBLISH_LOG=$(mktemp)
+echo "Publishing to npm..."
 if npm publish --access public $OTP_ARG >"$PUBLISH_LOG" 2>&1; then
   cat "$PUBLISH_LOG"
 else
@@ -119,6 +120,14 @@ else
     cat "$PUBLISH_LOG"
     npm login
     npm publish --access public $OTP_ARG
+  elif grep -qi "EOTP" "$PUBLISH_LOG" || grep -qi "one-time password" "$PUBLISH_LOG"; then
+    cat "$PUBLISH_LOG"
+    if [[ -z "${NPM_OTP:-}" ]]; then
+      echo "npm publish requires an OTP. Provide NPM_OTP or use an automation token and rerun." >&2
+      exit 1
+    fi
+    echo "Retrying npm publish with provided NPM_OTP..."
+    npm publish --access public --otp="$NPM_OTP"
   else
     cat "$PUBLISH_LOG" >&2
     exit 1
