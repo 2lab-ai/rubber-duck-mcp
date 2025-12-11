@@ -1,0 +1,17 @@
+{
+  "task_id": 14,
+  "scope": "Content: 낚시 입문서와 블루프린트 해금",
+  "goal": "Place a 'Book of Fishing' in the cabin that unlocks the wooden fishing rod blueprint once fully read.",
+  "decisions": [
+    "Reuse the book registry/reading progress to gate blueprint unlocks.",
+    "Keep the book short (cover + a few pages) with a clear final-page unlock cue."
+  ],
+  "plan": [
+    "Add a fishing book entry to the book registry and seed it on the cabin table.",
+    "Track reading progress; on completion, unlock the wooden fishing rod blueprint for the player.",
+    "Adjust blueprint knowledge checks so the new rod is hidden until unlocked; update todo tracking."
+  ],
+  "notes": [
+    "No new reading mechanics needed; rely on existing book_progress flow."
+  ]
+}

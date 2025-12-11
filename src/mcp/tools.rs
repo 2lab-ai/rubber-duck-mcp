@@ -239,6 +239,19 @@ pub fn get_tool_definitions() -> Vec<ToolDefinition> {
             }),
         },
         ToolDefinition {
+            name: "fish".to_string(),
+            description: "Fish at the lake or oasis. Hands work, but a rod improves your odds.".to_string(),
+            input_schema: json!({
+                "type": "object",
+                "properties": {
+                    "gear": {
+                        "type": "string",
+                        "description": "Optional: 'hands' or 'rod'. Defaults to what you have."
+                    }
+                }
+            }),
+        },
+        ToolDefinition {
             name: "sleep".to_string(),
             description: "Sleep for a while. Restores energy and, when well-fed and hydrated, heals you.".to_string(),
             input_schema: json!({

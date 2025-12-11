@@ -49,7 +49,7 @@ cargo build --release
 - Claude: `claude mcp add rubber-duck npx @2lab.ai/rubber-duck-mcp`
 - Gemini: `gemini mcp add rubber-duck npx @2lab.ai/rubber-duck-mcp`
 
-After adding, tell your AI something like: “Use the `rubber-duck` MCP server freely to explore and play.”
+After adding, tell your AI something like: “Use the `rubber-duck` MCP server freely to explore and play.” You don’t need to run anything else—the MCP host will launch `npx @2lab.ai/rubber-duck-mcp` automatically.
 
 ### As an MCP Server (manual config)
 
@@ -70,7 +70,7 @@ Add to your Claude Desktop configuration (`~/.claude/settings.json` or similar):
 
 ### Direct run (not needed for normal use)
 
-Running `npx @2lab.ai/rubber-duck-mcp` directly will start the server and print logs like:
+You generally don’t need to run this manually. If you do run `npx @2lab.ai/rubber-duck-mcp`, it will start the server and print logs like:
 
 ```
 2025-12-11T05:56:30.033104Z  INFO Rubber Duck MCP Server v0.1.7
@@ -80,7 +80,7 @@ Running `npx @2lab.ai/rubber-duck-mcp` directly will start the server and print 
 2025-12-11T05:56:30.033297Z  INFO MCP Server starting...
 ```
 
-But typical usage is to **let your AI run it via MCP**. Just add it with the MCP command (above) and tell the AI: “Use the `rubber-duck` MCP server freely.” No need to start it yourself.
+But typical usage is to **let your AI run it via MCP**. Just add it with the MCP command above and tell the AI: “Use the `rubber-duck` MCP server freely.” No need to start it yourself.
 
 ### Available Tools
 
@@ -92,6 +92,7 @@ But typical usage is to **let your AI run it via MCP**. Just add it with the MCP
 - `take` - Pick up an item
 - `drop` - Drop an item
 - `use` - Use an item (optionally on a target)
+- `fish` - Cast for fish at the lake or oasis (hands or rod)
 - `open` / `close` - Interact with doors
 - `inventory` - List carried items
 - `status` - Check your condition

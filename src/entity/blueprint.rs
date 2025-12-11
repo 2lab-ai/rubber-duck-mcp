@@ -34,6 +34,11 @@ const BLUEPRINT_RECIPES: &[BlueprintRecipe] = &[
         required: &[(Item::PlantFiber, 3)],
         time_cost: 10,
     },
+    BlueprintRecipe {
+        target_item: Item::FishingRod,
+        required: &[(Item::Bamboo, 1), (Item::Stick, 1), (Item::Cordage, 1)],
+        time_cost: 35,
+    },
 ];
 
 fn recipe_for(target: Item) -> Option<&'static BlueprintRecipe> {

@@ -138,6 +138,7 @@ impl McpServer {
             "take" => self.cmd_take(args),
             "drop" => self.cmd_drop(args),
             "use" => self.cmd_use(args),
+            "fish" => self.cmd_fish(args),
             "create" => self.cmd_create(args),
             "write" => self.cmd_write(args),
             "open" => self.cmd_open(args),
@@ -188,7 +189,7 @@ impl McpServer {
                 }
                 if let Some((r, c)) = pos.as_usize() {
                     if let Some(tile) = self.world.map.get_tile(r, c) {
-                        if matches!(tile.tile_type, TileType::Lake) {
+                        if matches!(tile.biome, Biome::Lake | Biome::Oasis) {
                             return true;
                         }
                     }
@@ -719,6 +720,36 @@ You feel calmer and a bit more refreshed. It is now {}.",
         CallToolResult::text(
             "You kneel and cup cold lake water in your hands, drinking deeply. It tastes clean and refreshing.".to_string()
         )
+    }
+
+    fn cmd_fish(&mut self, args: &Option<Value>) -> CallToolResult {
+        let gear = get_string_arg(args, "gear");
+        let result = try_fish(&mut self.world.state, &self.world.map, gear.as_deref());
+
+        match result {
+            InteractionResult::Success(msg) | InteractionResult::Failure(msg) => {
+                CallToolResult::text(msg)
+            }
+            InteractionResult::ItemObtained(_, msg) | InteractionResult::ItemLost(_, msg) => {
+                CallToolResult::text(msg)
+            }
+            InteractionResult::ActionSuccess {
+                message,
+                time_cost,
+                energy_cost,
+            } => {
+                for _ in 0..time_cost {
+                    self.world.tick();
+                }
+                self.world.state.player.modify_energy(-energy_cost);
+                let time_str = if time_cost > 0 {
+                    format!(" (took {} mins)", time_cost * 10)
+                } else {
+                    "".to_string()
+                };
+                CallToolResult::text(format!("{}{}", message, time_str))
+            }
+        }
     }
 
     fn cmd_sleep(&mut self, _args: &Option<Value>) -> CallToolResult {

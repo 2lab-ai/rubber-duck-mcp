@@ -1,6 +1,6 @@
 use crate::entity::{Blueprint, BookEntry, FireState, Item, Room};
 use crate::persistence::GameState;
-use crate::world::{Weather, WorldMap};
+use crate::world::{Biome, Position, TimeOfDay, Weather, WorldMap};
 use rand::Rng;
 
 pub enum InteractionResult {
@@ -554,7 +554,12 @@ pub fn try_use(
     if !has_item
         && matches!(
             item,
-            Item::Book | Item::TutorialBook | Item::OldBook | Item::DeathNote | Item::BlankBook
+            Item::Book
+                | Item::TutorialBook
+                | Item::OldBook
+                | Item::DeathNote
+                | Item::BookOfFishing
+                | Item::BlankBook
         )
         && matches!(state.player.room, Some(Room::CabinMain))
     {
@@ -573,7 +578,7 @@ pub fn try_use(
 
     if matches!(
         item,
-        Item::Book | Item::TutorialBook | Item::OldBook | Item::DeathNote
+        Item::Book | Item::TutorialBook | Item::OldBook | Item::DeathNote | Item::BookOfFishing
     ) {
         return handle_book_use(state, &item, target_str);
     }
@@ -675,7 +680,10 @@ pub fn try_use(
     }
 
     // 3b. Cooking simple foods on fire
-    if item == Item::Fish || item == Item::WildBerry {
+    if matches!(
+        item,
+        Item::Fish | Item::SmallFish | Item::BigFish | Item::WildBerry
+    ) {
         let in_cabin = matches!(state.player.room, Some(Room::CabinMain));
         let fire_lit = state
             .cabin_state()
@@ -702,13 +710,22 @@ pub fn try_use(
             energy_cost += 2.0;
         }
 
-        if item == Item::Fish {
-            if !state.player.inventory.remove(&Item::Fish, 1) {
+        if matches!(item, Item::Fish | Item::SmallFish | Item::BigFish) {
+            if !state.player.inventory.remove(&item, 1) {
                 return InteractionResult::Failure("You don't have a fish to cook.".to_string());
             }
-            state.player.inventory.add(Item::CookedFish, 1);
+            let yield_count = if item == Item::BigFish { 2 } else { 1 };
+            if item == Item::BigFish {
+                time_cost += 1;
+            }
+            state.player.inventory.add(Item::CookedFish, yield_count);
+            let portion_text = if yield_count > 1 {
+                "You portion the large fish into hearty fillets and grill them until they flake easily."
+            } else {
+                "You grill the fish over the fire until it flakes easily."
+            };
             return InteractionResult::ActionSuccess {
-                message: "You grill the fish over the fire until it flakes easily.".to_string(),
+                message: portion_text.to_string(),
                 time_cost,
                 energy_cost,
             };
@@ -790,10 +807,14 @@ pub fn try_use(
         Item::Apple
             | Item::WildBerry
             | Item::HerbalTea
-            | Item::Date
+            | Item::MuddyWater
             | Item::CleanWater
+            | Item::Date
             | Item::CookedFish
             | Item::CookedBerries
+            | Item::SmallFish
+            | Item::Fish
+            | Item::BigFish
     ) {
         return handle_consumption(state, item);
     }
@@ -1145,10 +1166,34 @@ fn handle_consumption(state: &mut GameState, item: Item) -> InteractionResult {
             state.player.modify_mood(2.0);
             "You snack on the berries.".to_string()
         }
+        Item::Date => {
+            state.player.modify_fullness(10.0);
+            state.player.modify_hydration(8.0);
+            state.player.modify_mood(2.0);
+            "Sweet dates revive you with a burst of sugar and moisture.".to_string()
+        }
         Item::CleanWater => {
             state.player.modify_hydration(25.0);
             state.player.modify_energy(2.0);
             "You drink the clean water. It tastes refreshing.".to_string()
+        }
+        Item::MuddyWater => {
+            state.player.modify_hydration(8.0);
+            state.player.modify_health(-4.0);
+            state.player.modify_mood(-3.0);
+            "You choke down the muddy water. It sits poorly in your stomach.".to_string()
+        }
+        Item::SmallFish | Item::Fish => {
+            state.player.modify_fullness(14.0);
+            state.player.modify_health(-1.0);
+            state.player.modify_mood(-2.0);
+            "You swallow the raw fish. It's briny and not entirely pleasant.".to_string()
+        }
+        Item::BigFish => {
+            state.player.modify_fullness(22.0);
+            state.player.modify_health(-2.0);
+            state.player.modify_mood(-3.0);
+            "You eat chunks of raw fish. It fills you, though it sits heavy.".to_string()
         }
         Item::CookedFish => {
             state.player.modify_fullness(25.0);
@@ -1173,6 +1218,156 @@ fn handle_consumption(state: &mut GameState, item: Item) -> InteractionResult {
         message,
         time_cost: 1,
         energy_cost: 0.0,
+    }
+}
+
+pub fn try_fish(
+    state: &mut GameState,
+    map: &WorldMap,
+    gear_hint: Option<&str>,
+) -> InteractionResult {
+    let pos = state.player.position;
+    let mut near_water = false;
+
+    'outer: for dr in -1..=1 {
+        for dc in -1..=1 {
+            let check = Position::new(pos.row + dr, pos.col + dc);
+            if let Some((r, c)) = check.as_usize() {
+                if let Some(tile) = map.get_tile(r, c) {
+                    if matches!(tile.biome, Biome::Lake | Biome::Oasis) {
+                        near_water = true;
+                        break 'outer;
+                    }
+                }
+            }
+        }
+    }
+
+    if !near_water {
+        return InteractionResult::Failure(
+            "You need to be right by the lake or oasis shore to fish.".to_string(),
+        );
+    }
+
+    if state.player.energy < 5.0 {
+        return InteractionResult::Failure("You are too exhausted to fish right now.".to_string());
+    }
+
+    let has_rod = state.player.inventory.has(&Item::FishingRod, 1);
+    let wants_rod = gear_hint
+        .map(|g| {
+            let lower = g.to_lowercase();
+            lower.contains("rod") || lower.contains("pole")
+        })
+        .unwrap_or(has_rod);
+    if wants_rod && !has_rod {
+        return InteractionResult::Failure(
+            "You reach for a rod, but you don't have one with you.".to_string(),
+        );
+    }
+    let using_rod = wants_rod && has_rod;
+
+    let weather_here = state.weather.get_for_position(pos.row, pos.col);
+    let tod = state.time.time_of_day();
+    let stormy = matches!(
+        weather_here,
+        Weather::HeavyRain | Weather::HeavySnow | Weather::Blizzard | Weather::Sandstorm
+    );
+
+    let mut outcomes: Vec<(&str, u32)> = if using_rod {
+        vec![("small", 45), ("big", 18), ("trash", 12), ("nothing", 25)]
+    } else {
+        vec![("small", 25), ("big", 6), ("trash", 20), ("nothing", 49)]
+    };
+
+    if matches!(tod, TimeOfDay::Dawn | TimeOfDay::Dusk | TimeOfDay::Evening) {
+        outcomes[0].1 += 6;
+        outcomes[1].1 += 4;
+        outcomes[3].1 = outcomes[3].1.saturating_sub(8);
+    }
+
+    if stormy {
+        outcomes[0].1 = outcomes[0].1.saturating_sub(5);
+        outcomes[1].1 = outcomes[1].1.saturating_sub(3);
+        outcomes[2].1 += 6;
+        outcomes[3].1 += 6;
+    }
+
+    let skill_bonus = (state.player.skills.get("survival") as u32 / 12)
+        + (state.player.skills.get("observation") as u32 / 20);
+    if skill_bonus > 0 {
+        outcomes[0].1 += skill_bonus;
+        outcomes[3].1 = outcomes[3].1.saturating_sub(skill_bonus.min(outcomes[3].1));
+    }
+
+    let total: u32 = outcomes.iter().map(|(_, w)| *w).sum::<u32>().max(1);
+    let roll = rand::thread_rng().gen_range(0..total);
+    let mut cursor = 0;
+    let chosen = outcomes
+        .iter()
+        .find(|(_, weight)| {
+            cursor += *weight;
+            roll < cursor
+        })
+        .map(|(name, _)| *name)
+        .unwrap_or("nothing");
+
+    let mut time_cost = if using_rod { 2 } else { 1 };
+    let mut energy_cost = if using_rod { 5.0 } else { 4.0 };
+    if stormy {
+        time_cost += 1;
+        energy_cost += 2.0;
+    }
+
+    let message = match chosen {
+        "small" => {
+            if !state.player.inventory.add(Item::SmallFish, 1) {
+                return InteractionResult::Failure(
+                    "Your pack is too heavy to stow the fish.".to_string(),
+                );
+            }
+            state.player.skills.improve("survival", 2);
+            state.player.skills.improve("observation", 1);
+            "You feel a quick tug and pull up a small fish, cool and slick in your hand."
+                .to_string()
+        }
+        "big" => {
+            if !state.player.inventory.add(Item::BigFish, 1) {
+                return InteractionResult::Failure(
+                    "The catch is too heavy for your current pack.".to_string(),
+                );
+            }
+            state.player.skills.improve("survival", 3);
+            state.player.skills.improve("observation", 1);
+            time_cost += 1;
+            energy_cost += 1.0;
+            "A strong pull bends your line. After a short struggle you haul in a hefty fish."
+                .to_string()
+        }
+        "trash" => {
+            if !state.player.inventory.add(Item::Driftwood, 1) {
+                return InteractionResult::Failure(
+                    "You snag some driftwood, but you're carrying too much to keep it.".to_string(),
+                );
+            }
+            state.player.skills.improve("survival", 1);
+            "Your line goes taut on something lifeless. You drag in a piece of driftwood."
+                .to_string()
+        }
+        _ => {
+            state.player.skills.improve("survival", 1);
+            "You wait with quiet patience, but nothing bites this time.".to_string()
+        }
+    };
+
+    if using_rod {
+        state.damage_tool(&Item::FishingRod, 1, "casting for fish");
+    }
+
+    InteractionResult::ActionSuccess {
+        message,
+        time_cost,
+        energy_cost,
     }
 }
 

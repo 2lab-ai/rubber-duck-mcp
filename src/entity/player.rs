@@ -359,6 +359,7 @@ impl Player {
             Item::StoneAxe => Some(40),
             Item::Knife => Some(70),
             Item::StoneKnife => Some(40),
+            Item::FishingRod => Some(50),
             _ => None,
         }
     }

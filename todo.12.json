@@ -1,0 +1,19 @@
+{
+  "task_id": 12,
+  "scope": "Exploration: Fishing & lake activities",
+  "goal": "Add basic fishing interactions at lake/oasis tiles with tiered success by gear and conditions, plus groundwork for boat/rafts.",
+  "decisions": [
+    "Support bare-hand fishing with low success and a simple `fish` action at lake/oasis biomes; improve odds with a fishing rod item.",
+    "Define a small catch table (small fish, big fish, trash, nothing) influenced by time/weather and gear.",
+    "Leave boat/raft crafting hooks for later; keep this iteration to shore fishing."
+  ],
+  "plan": [
+    "Add fishing action entry point restricted to lake/oasis; implement result weights by gear (hands vs fishing rod) and conditions.",
+    "Add catch outcomes (small/big fish items) and basic messages; award modest survival/observation XP.",
+    "Run cargo check and update todo tracking; note boat/raft as future work."
+  ],
+  "notes": [
+    "Keep it light: no mini-game, just weighted randoms with skill/gear bonuses.",
+    "Reuse existing items; add new fish size items only if needed."
+  ]
+}

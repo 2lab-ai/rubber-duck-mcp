@@ -10,6 +10,7 @@ use rand::Rng;
 const TUTORIAL_BOOK_ID: &str = "book-tutorial";
 const OLD_BOOK_ID: &str = "book-old";
 const DEATH_NOTE_ID: &str = "book-death-note";
+const FISHING_BOOK_ID: &str = "book-fishing";
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ForageNode {
@@ -208,6 +209,7 @@ impl GameState {
 
     pub fn refresh_blueprint_knowledge(&mut self, push_messages: bool) {
         let tutorial_done = self.book_completed(TUTORIAL_BOOK_ID);
+        let fishing_done = self.book_completed(FISHING_BOOK_ID);
         let active_target = self.player.active_project.as_ref().map(|bp| bp.target_item);
 
         let add_if = |state: &mut Self, item: Item, condition: bool, reason: &str| {
@@ -246,6 +248,12 @@ impl GameState {
             Item::StoneAxe,
             self.player.skills.woodcutting >= 12 || tutorial_done,
             "Woodcutting skill or completing the cabin tutorial reveals axe joinery.",
+        );
+        add_if(
+            self,
+            Item::FishingRod,
+            fishing_done,
+            "Finishing the Book of Fishing shows how to lash a simple rod.",
         );
     }
 
@@ -288,6 +296,16 @@ impl GameState {
             vec!["The human whose name is written in this note shall die."],
             true,
         );
+        insert_if_missing(
+            FISHING_BOOK_ID,
+            "Book of Fishing",
+            vec![
+                "A simple rod needs a straight pole, a bendable tip, and cordage tied in clean knots. Bamboo or a stiff stick will do.",
+                "Fish cruise the shallows at dawn and dusk. In storms they sink deep and hide; in clear weather, keep quiet and watch for ripples.",
+                "Close the book and you can almost feel the rhythm of casting. You think you could craft a wooden fishing rod now.",
+            ],
+            false,
+        );
 
         let max_seen = self
             .books
@@ -316,6 +334,7 @@ impl GameState {
         ensure(cabin, TUTORIAL_BOOK_ID, Item::TutorialBook);
         ensure(cabin, OLD_BOOK_ID, Item::OldBook);
         ensure(cabin, DEATH_NOTE_ID, Item::DeathNote);
+        ensure(cabin, FISHING_BOOK_ID, Item::BookOfFishing);
     }
 
     pub fn generate_book_id(&mut self) -> String {
@@ -365,6 +384,7 @@ impl GameState {
             Item::TutorialBook => Some(TUTORIAL_BOOK_ID),
             Item::OldBook => Some(OLD_BOOK_ID),
             Item::DeathNote => Some(DEATH_NOTE_ID),
+            Item::BookOfFishing => Some(FISHING_BOOK_ID),
             _ => None,
         }
     }
@@ -471,6 +491,7 @@ impl GameState {
             Item::StoneKnife => Some("Build basic survival skill to unlock this."),
             Item::Campfire => Some("Practice fire-making to level 8+ to learn this pattern."),
             Item::Cordage => Some("Tailoring 8+ reveals how to twist cordage."),
+            Item::FishingRod => Some("Finish reading the Book of Fishing to unlock this."),
             _ => None,
         }
     }
@@ -481,6 +502,7 @@ impl GameState {
             Item::Campfire,
             Item::Cordage,
             Item::StoneAxe,
+            Item::FishingRod,
         ];
         let mut hints = Vec::new();
         for item in targets {
@@ -511,7 +533,7 @@ impl GameState {
     pub fn on_player_pickup(&mut self, item: &Item) {
         if matches!(
             item,
-            Item::Book | Item::TutorialBook | Item::OldBook | Item::DeathNote
+            Item::Book | Item::TutorialBook | Item::OldBook | Item::DeathNote | Item::BookOfFishing
         ) {
             if let Some(book_id) = self
                 .take_cabin_book_for_item(item)
@@ -525,7 +547,7 @@ impl GameState {
     pub fn on_player_drop(&mut self, item: &Item) -> Option<String> {
         if matches!(
             item,
-            Item::Book | Item::TutorialBook | Item::OldBook | Item::DeathNote
+            Item::Book | Item::TutorialBook | Item::OldBook | Item::DeathNote | Item::BookOfFishing
         ) {
             // Prefer removing a matching special book id; otherwise pop any
             if let Some(id) = self

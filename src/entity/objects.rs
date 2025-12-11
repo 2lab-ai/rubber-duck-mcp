@@ -9,6 +9,8 @@ pub enum Item {
     StoneKnife, // Crafted knife
     Matchbox,
     FishingRod,
+    SmallFish,
+    BigFish,
     Fish,
 
     // Resources
@@ -35,15 +37,16 @@ pub enum Item {
     Driftwood,
     Bark,
     DryLeaves,
-    WildHerbs,    // For tea
-    Apple,        // Fruit from nearby trees
-    Date,         // From oasis
-    Bamboo,       // From bamboo grove
-    Paper,        // Crafted from bamboo
-    BlankBook,    // Unbound/writable book
-    Book,         // Written book
-    TutorialBook, // Tutorial copy
-    DeathNote,    // Spooky notebook
+    WildHerbs,     // For tea
+    Apple,         // Fruit from nearby trees
+    Date,          // From oasis
+    Bamboo,        // From bamboo grove
+    Paper,         // Crafted from bamboo
+    BlankBook,     // Unbound/writable book
+    Book,          // Written book
+    TutorialBook,  // Tutorial copy
+    DeathNote,     // Spooky notebook
+    BookOfFishing, // Guide to unlocking fishing rod
 
     // Structures / Placeables (as items for blueprint targets)
     Campfire,
@@ -65,13 +68,15 @@ pub enum Item {
     RubberDuck,
 }
 
-const ALL_ITEMS: [Item; 50] = [
+const ALL_ITEMS: [Item; 53] = [
     Item::Axe,
     Item::StoneAxe,
     Item::Knife,
     Item::StoneKnife,
     Item::Matchbox,
     Item::FishingRod,
+    Item::SmallFish,
+    Item::BigFish,
     Item::Fish,
     Item::Log,
     Item::Stick,
@@ -101,6 +106,7 @@ const ALL_ITEMS: [Item; 50] = [
     Item::Book,
     Item::TutorialBook,
     Item::DeathNote,
+    Item::BookOfFishing,
     Item::Campfire,
     Item::OldBook,
     Item::StrangeCompass,
@@ -127,6 +133,8 @@ impl Item {
             Item::StoneKnife => "stone knife",
             Item::Matchbox => "matchbox",
             Item::FishingRod => "fishing rod",
+            Item::SmallFish => "small fish",
+            Item::BigFish => "big fish",
             Item::Fish => "raw fish",
             Item::Log => "log",
             Item::Stick => "stick",
@@ -156,6 +164,7 @@ impl Item {
             Item::Book => "book",
             Item::TutorialBook => "tutorial book",
             Item::DeathNote => "death note",
+            Item::BookOfFishing => "book of fishing",
             Item::Campfire => "campfire",
             Item::OldBook => "old leather-bound book",
             Item::StrangeCompass => "strange compass",
@@ -182,6 +191,8 @@ impl Item {
             Item::StoneKnife => &["flint knife", "shard"],
             Item::Matchbox => &["matches", "match box"],
             Item::FishingRod => &["rod", "fishing pole", "pole"],
+            Item::SmallFish => &["small fish", "tiny fish"],
+            Item::BigFish => &["big fish", "large fish"],
             Item::Fish => &["fish", "raw fish"],
             Item::Log => &["unsplit log", "wood"],
             Item::Stick => &["branch", "twig", "wood stick"],
@@ -211,6 +222,7 @@ impl Item {
             Item::Book => &["notebook", "journal", "book"],
             Item::TutorialBook => &["tutorial", "guide book", "tutorial book"],
             Item::DeathNote => &["death note", "black notebook", "cursed book"],
+            Item::BookOfFishing => &["fishing book", "book of fishing", "angler guide"],
             Item::Campfire => &["fire", "fire pit"],
             Item::OldBook => &["book", "old book", "leather-bound book"],
             Item::StrangeCompass => &["compass", "odd compass"],
@@ -267,12 +279,16 @@ impl Item {
             Item::Cordage => "A crude rope braided from plant fibers.",
             Item::Campfire => "A ring of stones with wood, ready to be lit.",
             Item::Fish => "A fresh fish, still slick from the water.",
+            Item::SmallFish => "A small, wriggling fish.",
+            Item::BigFish => "A hefty fish that will make a hearty meal.",
             Item::Bamboo => "A straight, light bamboo stalk harvested near the lake.",
             Item::Paper => "A thin sheet of paper made from bamboo pulp.",
             Item::BlankBook => "A blank book with crisp pages, ready for a title.",
             Item::Book => "A bound book. Check its ID to read or write pages.",
             Item::TutorialBook => "A short guide left in the cabin.",
             Item::DeathNote => "A black notebook with ominous weight.",
+            Item::FishingRod => "A simple wooden fishing rod with cordage for line.",
+            Item::BookOfFishing => "A slim guide on casting, bait, and rod making.",
             Item::MuddyWater => "A container of unfiltered water. Boil before drinking.",
             Item::CleanWater => "Clear, boiled water that looks safe to drink.",
             Item::CookedFish => "Tender cooked fish, still steaming gently.",
@@ -289,11 +305,18 @@ impl Item {
             Item::Bamboo => 1.0,
             Item::Paper => 0.05,
             Item::BlankBook => 0.3,
-            Item::Book | Item::TutorialBook | Item::DeathNote | Item::OldBook => 0.4,
+            Item::Book
+            | Item::TutorialBook
+            | Item::DeathNote
+            | Item::OldBook
+            | Item::BookOfFishing => 0.4,
             Item::Fish => 1.0,
+            Item::SmallFish => 0.8,
+            Item::BigFish => 1.5,
             Item::MuddyWater | Item::CleanWater => 0.6,
             Item::CookedFish => 0.4,
             Item::CookedBerries => 0.2,
+            Item::FishingRod => 1.0,
             _ => 0.1,
         }
     }
