@@ -132,12 +132,13 @@ else
     npm publish --access public $OTP_ARG
   elif grep -qi "EOTP" "$PUBLISH_LOG" || grep -qi "one-time password" "$PUBLISH_LOG"; then
     cat "$PUBLISH_LOG"
-    if [[ -z "${NPM_OTP:-}" ]]; then
-      echo "npm publish requires an OTP. Provide NPM_OTP or use an automation token and rerun." >&2
+    if [[ -n "${NPM_TOKEN:-}" ]]; then
+      echo "npm publish requires an OTP even with NPM_TOKEN; aborting." >&2
       exit 1
     fi
-    echo "Retrying npm publish with provided NPM_OTP..."
-    npm publish --access public --otp="$NPM_OTP"
+    echo "npm publish requires an OTP. Attempting npm login --auth-type=web then retry..."
+    npm login --auth-type=web
+    npm publish --access public $OTP_ARG
   else
     cat "$PUBLISH_LOG" >&2
     exit 1
