@@ -1,6 +1,7 @@
 use serde::{Deserialize, Serialize};
 use crate::world::{Position, Direction};
 use super::objects::Item;
+use super::blueprint::Blueprint;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Skills {
@@ -8,6 +9,14 @@ pub struct Skills {
     pub fire_making: u8,   // 1-100
     pub observation: u8,   // 1-100
     pub foraging: u8,      // 1-100
+    #[serde(default)]
+    pub stonemasonry: u8,  // 1-100
+    #[serde(default)]
+    pub survival: u8,      // 1-100
+    #[serde(default)]
+    pub tailoring: u8,     // 1-100
+    #[serde(default)]
+    pub cooking: u8,       // 1-100
 }
 
 impl Skills {
@@ -17,6 +26,10 @@ impl Skills {
             fire_making: 10,
             observation: 10,
             foraging: 10,
+            stonemasonry: 10,
+            survival: 10,
+            tailoring: 10,
+            cooking: 10,
         }
     }
 
@@ -26,6 +39,10 @@ impl Skills {
             "fire_making" => &mut self.fire_making,
             "observation" => &mut self.observation,
             "foraging" => &mut self.foraging,
+            "stonemasonry" => &mut self.stonemasonry,
+            "survival" => &mut self.survival,
+            "tailoring" => &mut self.tailoring,
+            "cooking" => &mut self.cooking,
             _ => return,
         };
         *skill_ref = (*skill_ref).saturating_add(amount).min(100);
@@ -37,6 +54,10 @@ impl Skills {
             "fire_making" => self.fire_making,
             "observation" => self.observation,
             "foraging" => self.foraging,
+            "stonemasonry" => self.stonemasonry,
+            "survival" => self.survival,
+            "tailoring" => self.tailoring,
+            "cooking" => self.cooking,
             _ => 0,
         }
     }
@@ -166,10 +187,18 @@ pub struct Player {
     pub warmth: f32,      // 0-100 (50 = comfortable)
     pub energy: f32,      // 0-100
     pub mood: f32,        // 0-100
+    #[serde(default = "Player::default_fullness")]
+    pub fullness: f32,    // 0-100 (hunger)
+    #[serde(default = "Player::default_hydration")]
+    pub hydration: f32,   // 0-100 (thirst)
 
     // Progression
     pub skills: Skills,
     pub inventory: Inventory,
+    
+    // Crafting
+    #[serde(default)]
+    pub active_project: Option<Blueprint>,
 }
 
 impl Player {
@@ -183,9 +212,12 @@ impl Player {
             warmth: 50.0,
             energy: 100.0,
             mood: 70.0,
+            fullness: Self::default_fullness(),
+            hydration: Self::default_hydration(),
 
             skills: Skills::new(),
             inventory: Inventory::new(),
+            active_project: None,
         }
     }
 
@@ -225,6 +257,14 @@ impl Player {
         self.mood = (self.mood + delta).clamp(0.0, 100.0);
     }
 
+    pub fn modify_fullness(&mut self, delta: f32) {
+        self.fullness = (self.fullness + delta).clamp(0.0, 100.0);
+    }
+
+    pub fn modify_hydration(&mut self, delta: f32) {
+        self.hydration = (self.hydration + delta).clamp(0.0, 100.0);
+    }
+
     /// Calculate comfort level based on warmth
     pub fn comfort_description(&self) -> &'static str {
         match self.warmth {
@@ -258,14 +298,39 @@ impl Player {
         }
     }
 
+    pub fn fullness_description(&self) -> &'static str {
+        match self.fullness {
+            f if f < 20.0 => "very hungry",
+            f if f < 40.0 => "a bit hungry",
+            f if f < 60.0 => "satisfied",
+            f if f < 80.0 => "comfortable and full",
+            _ => "stuffed",
+        }
+    }
+
+    pub fn hydration_description(&self) -> &'static str {
+        match self.hydration {
+            h if h < 20.0 => "parched",
+            h if h < 40.0 => "thirsty",
+            h if h < 60.0 => "quenched",
+            h if h < 80.0 => "well hydrated",
+            _ => "brimming",
+        }
+    }
+
     pub fn status_summary(&self) -> String {
         format!(
-            "You feel {} and {}. Your energy level is {}.",
+            "You feel {} and {}. Your energy level is {}. You are {} and {}.",
             self.comfort_description(),
             self.mood_description(),
-            self.energy_description()
+            self.energy_description(),
+            self.fullness_description(),
+            self.hydration_description(),
         )
     }
+
+    fn default_fullness() -> f32 { 70.0 }
+    fn default_hydration() -> f32 { 70.0 }
 }
 
 impl Default for Player {

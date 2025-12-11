@@ -1,0 +1,46 @@
+{
+  "project_name": "Rubber Duck Survival: Blueprint Update",
+  "version": "2.1.0",
+  "tasks": [
+    {
+      "id": 1,
+      "category": "System Core",
+      "title": "Blueprint Entity System",
+      "description": "Create 'Blueprint' struct that holds: target_item, required_materials(Map), current_materials(Map), time_cost.",
+      "priority": "Critical",
+      "status": "pending"
+    },
+    {
+      "id": 2,
+      "category": "Interaction",
+      "title": "Universal 'Use' Handler",
+      "description": "Rewrite 'use' command to handle: Gathering (Tool->Resource), Processing (Tool->Item), and Building (Material->Blueprint).",
+      "priority": "Critical",
+      "status": "pending"
+    },
+    {
+      "id": 3,
+      "category": "Skills",
+      "title": "Skill Manager",
+      "description": "Implement Skill struct and XP logic. Map every 'use' action to a specific Skill ID.",
+      "priority": "High",
+      "status": "pending"
+    },
+    {
+      "id": 4,
+      "category": "Content",
+      "title": "Basic Survival Recipes",
+      "description": "Implement Blueprints for: Stone Knife, Campfire, Cordage (Grass Rope).",
+      "priority": "High",
+      "status": "pending"
+    },
+    {
+      "id": 5,
+      "category": "Realism",
+      "title": "Action Time Cost",
+      "description": "Ensure every 'use' action triggers the 'simulate' function to pass time (e.g., 10-30 mins).",
+      "priority": "Medium",
+      "status": "pending"
+    }
+  ]
+}

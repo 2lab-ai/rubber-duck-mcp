@@ -137,32 +137,34 @@ fn dir_name(dir: Direction) -> &'static str {
 /// Enter a location at current position
 pub fn try_enter(player: &mut Player, target: &str, map: &WorldMap, cabin_open: bool) -> MoveResult {
     let normalized = target.to_lowercase();
+    let cabin_pos = Position::new(6, 5);
 
-    // Check if at cabin position
-    if let Some((row, col)) = player.position.as_usize() {
-        if let Some(tile) = map.get_tile(row, col) {
-            match &tile.tile_type {
-                TileType::Cabin => {
-                    if normalized.contains("cabin") || normalized.contains("door") || normalized.contains("house") {
-                        if !cabin_open {
-                            return MoveResult::Blocked(
-                                "The cabin door is closed. You need to open it first.".to_string()
-                            );
-                        }
-                        player.enter_room(Room::CabinMain);
-                        return MoveResult::RoomTransition(
-                            "You step into the cozy cabin.".to_string()
-                        );
-                    }
-                }
-                _ => {}
-            }
+    // Check if trying to enter cabin (either on cabin tile or adjacent to it)
+    if normalized.contains("cabin") || normalized.contains("door") || normalized.contains("house") {
+        let distance = player.position.distance_to(&cabin_pos);
+
+        // Must be on or adjacent to cabin
+        if distance > 1.5 {
+            return MoveResult::InvalidDirection(
+                "You're too far from the cabin to enter it.".to_string()
+            );
         }
+
+        if !cabin_open {
+            return MoveResult::Blocked(
+                "The cabin door is closed. You need to open it first.".to_string()
+            );
+        }
+
+        player.position = cabin_pos; // Move to cabin position
+        player.enter_room(Room::CabinMain);
+        return MoveResult::RoomTransition(
+            "You step into the cozy cabin.".to_string()
+        );
     }
 
     // Check for entering wood shed from outside
     if player.room.is_none() {
-        let cabin_pos = Position::new(6, 5);
         if player.position.distance_to(&cabin_pos) < 2.0 {
             if normalized.contains("shed") || normalized.contains("wood") {
                 player.enter_room(Room::WoodShed);

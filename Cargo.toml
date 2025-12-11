@@ -27,6 +27,9 @@ tracing-subscriber = { version = "0.3", features = ["env-filter"] }
 # UUID for entity IDs
 uuid = { version = "1.0", features = ["v4", "serde"] }
 
+# HTTP server
+tiny_http = "0.12"
+
 [profile.release]
 opt-level = 3
 lto = true

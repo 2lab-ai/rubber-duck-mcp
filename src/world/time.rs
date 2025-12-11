@@ -66,6 +66,14 @@ impl TimeOfDay {
         }
     }
 
+    pub fn is_daytime(&self) -> bool {
+        matches!(self, TimeOfDay::Morning | TimeOfDay::Noon | TimeOfDay::Afternoon)
+    }
+
+    pub fn is_night(&self) -> bool {
+        matches!(self, TimeOfDay::Evening | TimeOfDay::Night | TimeOfDay::Midnight)
+    }
+
     /// Can aurora be visible?
     pub fn aurora_visible(&self) -> bool {
         matches!(self, TimeOfDay::Evening | TimeOfDay::Night | TimeOfDay::Midnight | TimeOfDay::Dawn)

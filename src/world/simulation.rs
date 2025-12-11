@@ -88,7 +88,17 @@ pub fn describe_sky(time: &WorldTime, weather: &RegionalWeather, row: i32, col: 
             description.push_str("A wall of sand obscures the sky, stinging any exposed skin. ");
         }
         (_, weather::Weather::HeatWave) => {
-            description.push_str("The air shimmers with intense heat under a merciless sun. ");
+            match tod {
+                TimeOfDay::Evening | TimeOfDay::Night | TimeOfDay::Midnight => {
+                    description.push_str("Even after dark, the air hangs heavy with trapped heat that refuses to fade. ");
+                }
+                TimeOfDay::Dusk | TimeOfDay::Dawn => {
+                    description.push_str("Heat haze warps the horizon, even as the sun sits low in the sky. ");
+                }
+                _ => {
+                    description.push_str("The air shimmers with intense heat under a merciless sun. ");
+                }
+            }
         }
     }
 

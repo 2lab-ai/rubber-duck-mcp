@@ -1,8 +1,111 @@
 use rand::seq::SliceRandom;
+use rand::Rng;
 use crate::world::*;
 use crate::entity::*;
 
 pub struct DescriptionGenerator;
+
+/// Ambient sounds based on biome, weather, and time
+fn ambient_sounds(biome: Biome, weather: Weather, time: TimeOfDay) -> Vec<&'static str> {
+    let mut sounds = Vec::new();
+
+    // Weather-based sounds
+    match weather {
+        Weather::LightRain => {
+            sounds.push("The gentle patter of rain creates a soothing rhythm.");
+            sounds.push("Raindrops tap softly on leaves overhead.");
+        }
+        Weather::HeavyRain => {
+            sounds.push("Rain drums heavily on every surface.");
+            sounds.push("The roar of falling rain fills the air.");
+        }
+        Weather::Sandstorm => {
+            sounds.push("Sand hisses against rock and bone.");
+            sounds.push("The wind howls, carrying grit through the air.");
+        }
+        Weather::Blizzard => {
+            sounds.push("The wind screams through the trees.");
+            sounds.push("Snow and ice rattle against anything standing.");
+        }
+        Weather::LightSnow => {
+            sounds.push("Snow falls in perfect silence.");
+        }
+        _ => {}
+    }
+
+    // Biome-based sounds
+    match biome {
+        Biome::SpringForest | Biome::MixedForest => {
+            match time {
+                TimeOfDay::Dawn | TimeOfDay::Morning => {
+                    sounds.push("Birds sing their morning chorus, filling the forest with melody.");
+                    sounds.push("A woodpecker drums rhythmically in the distance.");
+                }
+                TimeOfDay::Noon | TimeOfDay::Afternoon => {
+                    sounds.push("Insects buzz lazily in the warm air.");
+                    sounds.push("Leaves rustle gently in the breeze.");
+                }
+                TimeOfDay::Evening | TimeOfDay::Dusk => {
+                    sounds.push("Crickets begin their evening symphony.");
+                    sounds.push("An owl hoots somewhere in the gathering darkness.");
+                }
+                TimeOfDay::Night | TimeOfDay::Midnight => {
+                    sounds.push("The forest is alive with night sounds - rustling, chirping, the occasional hoot.");
+                    sounds.push("Frogs chorus in the darkness.");
+                }
+            }
+        }
+        Biome::Desert | Biome::Oasis => {
+            match time {
+                TimeOfDay::Night | TimeOfDay::Midnight | TimeOfDay::Evening => {
+                    sounds.push("Desert insects chirp in the cool night air.");
+                }
+                _ => {
+                    sounds.push("The desert is eerily quiet, broken only by the whisper of shifting sand.");
+                }
+            }
+        }
+        Biome::WinterForest => {
+            match time {
+                TimeOfDay::Night | TimeOfDay::Midnight => {
+                    sounds.push("A wolf howls in the distance, haunting and beautiful.");
+                    sounds.push("The snow absorbs all sound, creating profound silence.");
+                }
+                _ => {
+                    sounds.push("Snow creaks underfoot in the cold stillness.");
+                    sounds.push("Branches crack occasionally under their frozen burden.");
+                }
+            }
+        }
+        Biome::Lake => {
+            sounds.push("Water laps gently against the shore.");
+            sounds.push("Fish break the surface occasionally, creating soft splashes.");
+            if matches!(time, TimeOfDay::Evening | TimeOfDay::Night) {
+                sounds.push("Frogs sing their chorus from the reeds.");
+            }
+        }
+        Biome::Path => {
+            sounds.push("Leaves crunch softly underfoot.");
+        }
+    }
+
+    sounds
+}
+
+/// Get a random ambient sound for the current conditions
+fn get_ambient_sound(biome: Biome, weather: Weather, time: TimeOfDay) -> Option<String> {
+    let sounds = ambient_sounds(biome, weather, time);
+    if sounds.is_empty() {
+        return None;
+    }
+    let mut rng = rand::thread_rng();
+    // 60% chance to include an ambient sound
+    if rng.gen_bool(0.6) {
+        sounds.choose(&mut rng).map(|s| s.to_string())
+    } else {
+        None
+    }
+}
 
 impl DescriptionGenerator {
     /// Generate a full description of the player's current location
@@ -14,6 +117,7 @@ impl DescriptionGenerator {
         wildlife: &[Wildlife],
         cabin: &Cabin,
         wood_shed: &WoodShed,
+        trees: &[Tree],
     ) -> String {
         // If in a room, describe that instead
         if let Some(room) = &player.room {
@@ -39,6 +143,12 @@ impl DescriptionGenerator {
         description.push_str("\n\n");
         description.push_str(&Self::tile_description(tile, row, col, player.facing, map));
 
+        // Trees nearby
+        if let Some(tree) = trees.iter().find(|t| !t.felled && t.position == player.position) {
+            description.push_str("\n\n");
+            description.push_str(tree.description());
+        }
+
         // Sky description
         description.push_str("\n\n");
         description.push_str(&describe_sky(time, weather, row as i32, col as i32, tile.biome));
@@ -57,6 +167,13 @@ impl DescriptionGenerator {
                 description.push_str(&w.describe());
                 description.push(' ');
             }
+        }
+
+        // Ambient sounds
+        let current_weather = weather.get_for_position(row as i32, col as i32);
+        if let Some(sound) = get_ambient_sound(tile.biome, current_weather, time.time_of_day()) {
+            description.push_str("\n\n");
+            description.push_str(&sound);
         }
 
         // Exits
@@ -81,18 +198,19 @@ impl DescriptionGenerator {
             TimeOfDay::Midnight => "In the deep midnight hours",
         };
 
-        let weather_phrase = match current_weather {
-            Weather::Clear => "",
-            Weather::Cloudy => ", clouds drift overhead",
-            Weather::Overcast => ", gray clouds blanket the sky",
-            Weather::LightRain => ", a gentle rain falls",
-            Weather::HeavyRain => ", rain pours down around you",
-            Weather::Fog => ", thick fog swirls around you",
-            Weather::Sandstorm => ", sand whips through the air",
-            Weather::HeatWave => ", the heat is almost unbearable",
-            Weather::LightSnow => ", delicate snowflakes drift down",
-            Weather::HeavySnow => ", heavy snow falls steadily",
-            Weather::Blizzard => ", a fierce blizzard rages",
+        let weather_phrase = match (current_weather, tod.is_daytime()) {
+            (Weather::Clear, _) => "",
+            (Weather::Cloudy, _) => ", clouds drift overhead",
+            (Weather::Overcast, _) => ", gray clouds blanket the sky",
+            (Weather::LightRain, _) => ", a gentle rain falls",
+            (Weather::HeavyRain, _) => ", rain pours down around you",
+            (Weather::Fog, _) => ", thick fog swirls around you",
+            (Weather::Sandstorm, _) => ", sand whips through the air",
+            (Weather::HeatWave, true) => ", the heat is almost unbearable",
+            (Weather::HeatWave, false) => ", even at night the air clings with lingering heat",
+            (Weather::LightSnow, _) => ", delicate snowflakes drift down",
+            (Weather::HeavySnow, _) => ", heavy snow falls steadily",
+            (Weather::Blizzard, _) => ", a fierce blizzard rages",
         };
 
         format!("{}{}, you find yourself in the {}.",
@@ -231,6 +349,20 @@ impl DescriptionGenerator {
 
         let fireplace_desc = cabin.fireplace.state.description();
 
+        // Ambient sounds for cabin
+        let ambient = match &cabin.fireplace.state {
+            FireState::Roaring => "\n\nThe fire crackles and pops cheerfully, filling the cabin with warmth and the pleasant scent of woodsmoke.",
+            FireState::Burning => "\n\nThe fire crackles softly, a comforting presence in the quiet room.",
+            FireState::Smoldering => "\n\nThe embers hiss and whisper, struggling to stay alive.",
+            FireState::Cold => {
+                match tod {
+                    TimeOfDay::Night | TimeOfDay::Midnight =>
+                        "\n\nThe cabin is quiet, save for the occasional creak of settling wood.",
+                    _ => ""
+                }
+            }
+        };
+
         let items_on_ground: Vec<&str> = cabin.items.iter()
             .map(|i| i.name())
             .collect();
@@ -241,14 +373,24 @@ impl DescriptionGenerator {
             format!("\n\nScattered about you notice: {}.", items_on_ground.join(", "))
         };
 
+        let table_items = cabin.table_item_names();
+        let table_desc = if table_items.is_empty() {
+            "A sturdy wooden table sits at the center, its surface worn smooth by time.".to_string()
+        } else {
+            format!(
+                "A sturdy wooden table sits at the center, bearing: {}.",
+                table_items.join(", ")
+            )
+        };
+
         format!(
             "You are in the main room of the cabin. {}\n\n\
             A stone fireplace dominates one wall. {} \
             A wooden mantelpiece above it holds various curious items. \
-            Worn but comfortable furniture fills the space - a sturdy table, \
-            wooden chairs, and a faded rug that has seen better days.{}\n\n\
+            Worn but comfortable furniture fills the space - wooden chairs and a faded rug that has seen better days. \
+            {}{}{}\n\n\
             **Exits:** North to terrace | West to wood shed | South to outside",
-            light, fireplace_desc, items_desc
+            light, fireplace_desc, table_desc, ambient, items_desc
         )
     }
 
@@ -342,6 +484,7 @@ impl DescriptionGenerator {
         time: &WorldTime,
         weather: &RegionalWeather,
         wildlife: &[Wildlife],
+        trees: &[Tree],
     ) -> String {
         // If in terrace, special viewing
         if matches!(player.room, Some(Room::CabinTerrace)) {
@@ -375,7 +518,19 @@ impl DescriptionGenerator {
             TileType::Lake => "The lake's surface glitters, stretching into the distance.".to_string(),
             TileType::Cabin => "The cabin stands waiting, its chimney silhouetted against the sky.".to_string(),
             TileType::Path => "A well-worn path winds through the trees.".to_string(),
-            TileType::Forest(biome) => Self::distant_biome_description(*biome),
+            TileType::Forest(biome) => {
+                let mut base = Self::distant_biome_description(*biome);
+                if let Some(tree) = trees.iter().find(|t| !t.felled && t.position.row == look_row && t.position.col == look_col) {
+                    base.push_str(" You spot a ");
+                    base.push_str(match tree.kind {
+                        TreeType::Pine => "tall pine",
+                        TreeType::Birch => "slender birch",
+                        TreeType::Apple => "sturdy apple tree",
+                    });
+                    base.push('.');
+                }
+                base
+            }
             TileType::WoodShed => "The small wood shed is visible.".to_string(),
         });
 

@@ -1,4 +1,6 @@
 use serde::{Deserialize, Serialize};
+use crate::entity::{Item, LocationItems};
+use rand::Rng;
 
 pub const MAP_WIDTH: usize = 11;
 pub const MAP_HEIGHT: usize = 11;
@@ -100,16 +102,27 @@ pub struct Tile {
     pub biome: Biome,
     pub elevation: f32,
     pub walkable: bool,
+    pub items: LocationItems,
 }
 
 impl Tile {
     pub fn new(tile_type: TileType, biome: Biome) -> Self {
         let walkable = !matches!(tile_type, TileType::Lake);
+        let mut items = LocationItems::new();
+        
+        // Spawn basic resources (Stones) everywhere except deep lake
+        if !matches!(tile_type, TileType::Lake) {
+            let mut rng = rand::thread_rng();
+            let stone_count = rng.gen_range(3..=10);
+            items.add(Item::Stone, stone_count);
+        }
+
         Self {
             tile_type,
             biome,
             elevation: 0.0,
             walkable,
+            items,
         }
     }
 }

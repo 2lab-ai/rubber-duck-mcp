@@ -13,13 +13,15 @@ use crate::persistence::*;
 pub struct McpServer {
     world: World,
     initialized: bool,
+    log_path: std::path::PathBuf,
 }
 
 impl McpServer {
-    pub fn new(state_path: std::path::PathBuf) -> Self {
+    pub fn new(state_path: std::path::PathBuf, log_path: std::path::PathBuf) -> Self {
         Self {
             world: World::new(state_path),
             initialized: false,
+            log_path,
         }
     }
 
@@ -115,11 +117,15 @@ impl McpServer {
         };
 
         let result = self.execute_tool(&call_params.name, &call_params.arguments);
+        if let Some(text) = extract_text(&result) {
+            self.append_web_log(&format!("[{}] {}", call_params.name, text));
+        }
+
         JsonRpcResponse::success(id, serde_json::to_value(result).unwrap())
     }
 
     fn execute_tool(&mut self, name: &str, args: &Option<Value>) -> CallToolResult {
-        match name {
+        let result = match name {
             "look" => self.cmd_look(args),
             "move" => self.cmd_move(args),
             "enter" => self.cmd_enter(args),
@@ -128,16 +134,56 @@ impl McpServer {
             "take" => self.cmd_take(args),
             "drop" => self.cmd_drop(args),
             "use" => self.cmd_use(args),
+            "create" => self.cmd_create(args),
             "open" => self.cmd_open(args),
             "close" => self.cmd_close(args),
             "inventory" => self.cmd_inventory(args),
             "status" => self.cmd_status(args),
+            "meditate" => self.cmd_meditate(args),
+            "drink" => self.cmd_drink(args),
+            "sleep" => self.cmd_sleep(args),
             "wait" => self.cmd_wait(args),
+            "kick" => self.cmd_kick(args),
+            "talk" => self.cmd_talk(args),
+            "name" => self.cmd_name(args),
             "simulate" => self.cmd_simulate(args),
             "time" => self.cmd_time(args),
             "skills" => self.cmd_skills(args),
             _ => CallToolResult::error(format!("Unknown tool: {}", name)),
+        };
+
+        // Append any pending messages (like fire warnings)
+        self.append_pending_messages(result)
+    }
+
+    fn append_pending_messages(&mut self, mut result: CallToolResult) -> CallToolResult {
+        if !self.world.state.pending_messages.is_empty() {
+            let messages = self.world.state.pending_messages.drain(..).collect::<Vec<_>>();
+            if let Some(ToolContent::Text { text }) = result.content.first_mut() {
+                let notifications = messages.join("\n");
+                *text = format!("{}\n\n**[{}]**", text, notifications);
+            }
         }
+        result
+    }
+
+    fn is_near_water(&self) -> bool {
+        if let Some((row, col)) = self.world.state.player.position.as_usize() {
+            for dr in -1..=1 {
+                for dc in -1..=1 {
+                    let nr = row as i32 + dr;
+                    let nc = col as i32 + dc;
+                    if self.world.map.is_valid_position(nr, nc) {
+                        if let Some(tile) = self.world.map.get_tile(nr as usize, nc as usize) {
+                            if matches!(tile.tile_type, TileType::Lake) {
+                                return true;
+                            }
+                        }
+                    }
+                }
+            }
+        }
+        false
     }
 
     // Command implementations
@@ -154,6 +200,7 @@ impl McpServer {
                     &self.world.state.time,
                     &self.world.state.weather,
                     &self.world.state.wildlife,
+                    &self.world.state.trees,
                 )
             } else {
                 format!("'{}' is not a valid direction.", dir_str)
@@ -167,6 +214,7 @@ impl McpServer {
                 &self.world.state.wildlife,
                 &self.world.state.cabin,
                 &self.world.state.wood_shed,
+                &self.world.state.trees,
             )
         };
 
@@ -196,7 +244,6 @@ impl McpServer {
 
         let text = match result {
             MoveResult::Success(msg) => {
-                // Also describe the new location
                 let location_desc = DescriptionGenerator::describe_location(
                     &self.world.state.player,
                     &self.world.map,
@@ -205,6 +252,7 @@ impl McpServer {
                     &self.world.state.wildlife,
                     &self.world.state.cabin,
                     &self.world.state.wood_shed,
+                    &self.world.state.trees,
                 );
                 format!("{}\n\n{}", msg, location_desc)
             }
@@ -219,6 +267,7 @@ impl McpServer {
                     &self.world.state.wildlife,
                     &self.world.state.cabin,
                     &self.world.state.wood_shed,
+                    &self.world.state.trees,
                 );
                 format!("{}\n\n{}", msg, location_desc)
             }
@@ -250,6 +299,7 @@ impl McpServer {
                     &self.world.state.wildlife,
                     &self.world.state.cabin,
                     &self.world.state.wood_shed,
+                    &self.world.state.trees,
                 );
                 format!("{}\n\n{}", msg, location_desc)
             }
@@ -272,6 +322,7 @@ impl McpServer {
                     &self.world.state.wildlife,
                     &self.world.state.cabin,
                     &self.world.state.wood_shed,
+                    &self.world.state.trees,
                 );
                 format!("{}\n\n{}", msg, location_desc)
             }
@@ -309,6 +360,7 @@ impl McpServer {
             &mut self.world.state.player,
             &mut self.world.state.cabin,
             &mut self.world.state.wood_shed,
+            &mut self.world.map,
         );
 
         let text = match result {
@@ -316,6 +368,7 @@ impl McpServer {
             InteractionResult::Failure(msg) => msg,
             InteractionResult::ItemObtained(_, msg) => msg,
             InteractionResult::ItemLost(_, msg) => msg,
+            _ => "Action not supported here".to_string(),
         };
 
         CallToolResult::text(text)
@@ -339,6 +392,7 @@ impl McpServer {
             InteractionResult::Failure(msg) => msg,
             InteractionResult::ItemObtained(_, msg) => msg,
             InteractionResult::ItemLost(_, msg) => msg,
+            _ => "Action not supported here".to_string(),
         };
 
         CallToolResult::text(text)
@@ -352,21 +406,48 @@ impl McpServer {
 
         let target = get_string_arg(args, "target");
 
-        let result = use_item(
+        // Universal Use Handler from interaction.rs
+        let result = try_use(
             &item,
             target.as_deref(),
             &mut self.world.state.player,
             &mut self.world.state.cabin,
             &mut self.world.state.wood_shed,
+            &self.world.map,
+            &mut self.world.state.trees,
         );
 
-        let text = match result {
-            CraftResult::Success(msg) => msg,
-            CraftResult::Failure(msg) => msg,
-            CraftResult::PartialSuccess(msg) => msg,
+        match result {
+            InteractionResult::Success(msg) => CallToolResult::text(msg),
+            InteractionResult::Failure(msg) => CallToolResult::text(msg),
+            InteractionResult::ItemObtained(_, msg) => CallToolResult::text(msg),
+            InteractionResult::ItemLost(_, msg) => CallToolResult::text(msg),
+            InteractionResult::ActionSuccess { message, time_cost, energy_cost } => {
+                // Pass time and drain energy
+                for _ in 0..time_cost {
+                    self.world.tick();
+                }
+                self.world.state.player.modify_energy(-energy_cost);
+                
+                let time_str = if time_cost > 0 { format!(" (took {} mins)", time_cost * 10) } else { "".to_string() };
+                CallToolResult::text(format!("{}{}", message, time_str))
+            }
+        }
+    }
+
+    fn cmd_create(&mut self, args: &Option<Value>) -> CallToolResult {
+        let item = match get_string_arg(args, "item") {
+            Some(i) => i,
+            None => return CallToolResult::error("Please specify an item to create.".to_string()),
         };
 
-        CallToolResult::text(text)
+        let result = try_create(&item, &mut self.world.state.player);
+
+        match result {
+            InteractionResult::Success(msg) => CallToolResult::text(msg),
+            InteractionResult::Failure(msg) => CallToolResult::text(msg),
+            _ => CallToolResult::error("Unexpected result".to_string()),
+        }
     }
 
     fn cmd_open(&mut self, args: &Option<Value>) -> CallToolResult {
@@ -426,6 +507,11 @@ impl McpServer {
                 text.push_str(&format!("- {} (x{})\n", item.name(), qty));
             }
         }
+        
+        // Show active project if any
+        if let Some(bp) = &self.world.state.player.active_project {
+            text.push_str(&format!("\n**Active Project:**\n- {}\n", bp.status_description()));
+        }
 
         let weight = self.world.state.player.inventory.current_weight();
         let max_weight = self.world.state.player.inventory.max_weight;
@@ -442,16 +528,155 @@ impl McpServer {
             Health: {:.0}/100\n\
             Warmth: {:.0}/100 ({})\n\
             Energy: {:.0}/100 ({})\n\
-            Mood: {:.0}/100 ({})\n\n\
+            Mood: {:.0}/100 ({})\n\
+            Fullness: {:.0}/100 ({})\n\
+            Hydration: {:.0}/100 ({})\n\n\
             {}",
             player.health,
             player.warmth, player.comfort_description(),
             player.energy, player.energy_description(),
             player.mood, player.mood_description(),
+            player.fullness, player.fullness_description(),
+            player.hydration, player.hydration_description(),
             player.status_summary()
         );
 
         CallToolResult::text(text)
+    }
+
+    fn cmd_meditate(&mut self, _args: &Option<Value>) -> CallToolResult {
+        let position = self.world.state.player.position;
+        let room = self.world.state.player.room.clone();
+
+        let near_water = self.is_near_water();
+        let cozy_fire = matches!(room, Some(Room::CabinMain)) &&
+            !matches!(self.world.state.cabin.fireplace.state, FireState::Cold);
+
+        let (row, col) = position.as_usize().unwrap_or((5, 5));
+        let biome = self.world.map.get_biome_at(row, col).unwrap_or(Biome::MixedForest);
+
+        let setting = match room {
+            Some(Room::CabinMain) if cozy_fire =>
+                "You settle near the fireplace, letting its warmth seep into your hands.",
+            Some(Room::CabinMain) =>
+                "You find a quiet corner of the cabin and close your eyes.",
+            Some(Room::CabinTerrace) =>
+                "You rest on the terrace rail, eyes drifting over the lake's surface.",
+            Some(Room::WoodShed) =>
+                "You lean against the shed wall, breathing in the scent of cut wood.",
+            None if near_water =>
+                "You sit by the water's edge, watching ripples form and fade.",
+            None =>
+                "You find a soft patch of ground and sit cross-legged, grounding yourself.",
+        };
+
+        // Let a little time pass while meditating
+        self.world.tick();
+
+        let mut mood_gain = 12.0;
+        if near_water {
+            mood_gain += 3.0;
+        }
+        if cozy_fire {
+            mood_gain += 2.0;
+        }
+
+        let energy_gain = 5.0;
+        let warmth_gain = if cozy_fire { 6.0 } else { 0.0 };
+
+        let player = &mut self.world.state.player;
+        player.modify_mood(mood_gain);
+        player.modify_energy(energy_gain);
+        if warmth_gain > 0.0 {
+            player.modify_warmth(warmth_gain);
+        }
+
+        let sky_desc = describe_sky(
+            &self.world.state.time,
+            &self.world.state.weather,
+            position.row,
+            position.col,
+            biome,
+        );
+        let time_desc = self.world.state.time.time_description();
+
+        let texture = if cozy_fire {
+            "The steady crackle of the fire keeps you anchored in the moment."
+        } else if near_water {
+            "Waves lap softly nearby, keeping time with your breath."
+        } else {
+            "The quiet around you makes it easy to notice each inhale and exhale."
+        };
+
+        let text = format!(
+            "{}
+
+{}
+{}
+
+You breathe slowly, letting thoughts drift. After a few minutes, a gentle clarity settles in.
+
+You feel calmer and a bit more refreshed. It is now {}.",
+            setting,
+            sky_desc.trim(),
+            texture,
+            time_desc
+        );
+
+        CallToolResult::text(text)
+    }
+
+    fn cmd_drink(&mut self, _args: &Option<Value>) -> CallToolResult {
+        let near_water = self.is_near_water();
+        if !near_water {
+            return CallToolResult::error("You need to be right by the lake to drink the water.".to_string());
+        }
+
+        self.world.state.player.modify_hydration(30.0);
+        self.world.state.player.modify_fullness(3.0);
+        self.world.state.player.modify_mood(2.0);
+
+        // A quick sip still passes a little time
+        self.world.tick();
+
+        CallToolResult::text(
+            "You kneel and cup cold lake water in your hands, drinking deeply. It tastes clean and refreshing.".to_string()
+        )
+    }
+
+    fn cmd_sleep(&mut self, _args: &Option<Value>) -> CallToolResult {
+        let well_fed = {
+            let p = &self.world.state.player;
+            p.fullness >= 60.0 && p.hydration >= 50.0
+        };
+
+        // Advance time while sleeping (about an hour)
+        for _ in 0..6 {
+            self.world.tick();
+        }
+
+        // Restore stats
+        let player = &mut self.world.state.player;
+        player.modify_energy(25.0);
+        player.modify_mood(6.0);
+        player.modify_fullness(-5.0);
+        player.modify_hydration(-5.0);
+        if well_fed {
+            player.modify_health(15.0);
+        } else {
+            player.modify_health(5.0);
+        }
+
+        let text = if well_fed {
+            "You curl up and drift into a deep, satisfying sleep. With a full belly and quenched thirst, your body mends itself."
+        } else {
+            "You doze for a while. It's not the most comfortable rest, but it helps a bit."
+        };
+
+        CallToolResult::text(format!(
+            "{}\n\nYou wake feeling more rested.",
+            text
+        ))
     }
 
     fn cmd_wait(&mut self, args: &Option<Value>) -> CallToolResult {
@@ -490,6 +715,67 @@ impl McpServer {
         );
 
         CallToolResult::text(text)
+    }
+
+    fn cmd_kick(&mut self, _args: &Option<Value>) -> CallToolResult {
+        let result = kick_tree(
+            &mut self.world.state.player,
+            &mut self.world.state.cabin,
+            &mut self.world.state.trees,
+        );
+
+        let text = match result {
+            CraftResult::Success(msg) => msg,
+            CraftResult::Failure(msg) => msg,
+            CraftResult::PartialSuccess(msg) => msg,
+        };
+
+        CallToolResult::text(text)
+    }
+
+    fn cmd_talk(&mut self, args: &Option<Value>) -> CallToolResult {
+        let message = get_string_arg(args, "message");
+        let duck_name = self.world.state.display_name(&Item::RubberDuck);
+        let result = talk_to_rubber_duck(
+            message.as_deref(),
+            &self.world.state.player,
+            &self.world.state.cabin,
+            &duck_name,
+        );
+
+        let text = match result {
+            InteractionResult::Success(msg) => msg,
+            InteractionResult::Failure(msg) => msg,
+            InteractionResult::ItemObtained(_, msg) => msg,
+            InteractionResult::ItemLost(_, msg) => msg,
+            _ => "Action not supported.".to_string(),
+        };
+
+        CallToolResult::text(text)
+    }
+
+    fn cmd_name(&mut self, args: &Option<Value>) -> CallToolResult {
+        let item_str = match get_string_arg(args, "item") {
+            Some(i) => i,
+            None => return CallToolResult::error("Please specify which item to name.".to_string()),
+        };
+        let new_name = match get_string_arg(args, "name") {
+            Some(n) => n,
+            None => return CallToolResult::error("Please provide a name.".to_string()),
+        };
+
+        let item = match Item::from_str(&item_str) {
+            Some(i) => i,
+            None => return CallToolResult::error(format!("Unknown item '{}'.", item_str)),
+        };
+
+        if !self.world.state.player_can_access_item(&item) {
+            return CallToolResult::error("You need to have or be next to that item to name it.".to_string());
+        }
+
+        self.world.state.set_custom_name(item, &new_name);
+        let display = self.world.state.display_name(&item);
+        CallToolResult::text(format!("You name the {} '{}'.", item.name(), display))
     }
 
     fn cmd_simulate(&mut self, args: &Option<Value>) -> CallToolResult {
@@ -535,13 +821,52 @@ impl McpServer {
             Woodcutting: {}/100\n\
             Fire Making: {}/100\n\
             Observation: {}/100\n\
-            Foraging: {}/100",
+            Foraging: {}/100\n\
+            Stonemasonry: {}/100\n\
+            Survival: {}/100\n\
+            Tailoring: {}/100\n\
+            Cooking: {}/100",
             skills.woodcutting,
             skills.fire_making,
             skills.observation,
-            skills.foraging
+            skills.foraging,
+            skills.stonemasonry,
+            skills.survival,
+            skills.tailoring,
+            skills.cooking
         );
 
         CallToolResult::text(text)
+    }
+
+    fn append_web_log(&self, line: &str) {
+        use std::fs::OpenOptions;
+        use std::io::Write;
+
+        if let Some(parent) = self.log_path.parent() {
+            let _ = std::fs::create_dir_all(parent);
+        }
+
+        if let Ok(mut f) = OpenOptions::new()
+            .create(true)
+            .append(true)
+            .open(&self.log_path)
+        {
+            let _ = writeln!(f, "[{}] {}", timestamp(), line);
+        }
+    }
+}
+
+fn extract_text(result: &CallToolResult) -> Option<String> {
+    result.content.iter().find_map(|c| match c {
+        ToolContent::Text { text } => Some(text.clone()),
+    })
+}
+
+fn timestamp() -> String {
+    use std::time::{SystemTime, UNIX_EPOCH};
+    match SystemTime::now().duration_since(UNIX_EPOCH) {
+        Ok(d) => format!("{}", d.as_secs()),
+        Err(_) => "0".to_string(),
     }
 }

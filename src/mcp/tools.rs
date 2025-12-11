@@ -99,17 +99,31 @@ pub fn get_tool_definitions() -> Vec<ToolDefinition> {
         },
         ToolDefinition {
             name: "use".to_string(),
-            description: "Use an item, optionally on a target. Examples: use axe on log, use matchbox on kindling, use blanket.".to_string(),
+            description: "Use an item/tool on a target. Examples: use axe on tree (chop), use knife on branch (whittle), use log on blueprint (build).".to_string(),
             input_schema: json!({
                 "type": "object",
                 "properties": {
                     "item": {
                         "type": "string",
-                        "description": "The item to use"
+                        "description": "The item/tool to use (Subject)"
                     },
                     "target": {
                         "type": "string",
-                        "description": "Optional target to use the item on"
+                        "description": "The target to use it on (Object). E.g. 'tree', 'blueprint', 'rock'"
+                    }
+                },
+                "required": ["item"]
+            }),
+        },
+        ToolDefinition {
+            name: "create".to_string(),
+            description: "Start a crafting project by creating a blueprint. Example: create campfire, create stone_axe.".to_string(),
+            input_schema: json!({
+                "type": "object",
+                "properties": {
+                    "item": {
+                        "type": "string",
+                        "description": "The item you want to craft"
                     }
                 },
                 "required": ["item"]
@@ -152,8 +166,63 @@ pub fn get_tool_definitions() -> Vec<ToolDefinition> {
             }),
         },
         ToolDefinition {
+            name: "name".to_string(),
+            description: "Give an item a custom name. Example: name rubber duck as 'James'.".to_string(),
+            input_schema: json!({
+                "type": "object",
+                "properties": {
+                    "item": {
+                        "type": "string",
+                        "description": "The item to name"
+                    },
+                    "name": {
+                        "type": "string",
+                        "description": "The new name to give the item"
+                    }
+                },
+                "required": ["item", "name"]
+            }),
+        },
+        ToolDefinition {
             name: "status".to_string(),
             description: "Check your current physical and mental condition, including warmth, energy, health, and mood.".to_string(),
+            input_schema: json!({
+                "type": "object",
+                "properties": {}
+            }),
+        },
+        ToolDefinition {
+            name: "meditate".to_string(),
+            description: "Take a mindful pause to recover mood and energy. Works best near the lake, terrace, or a cozy fire.".to_string(),
+            input_schema: json!({
+                "type": "object",
+                "properties": {}
+            }),
+        },
+        ToolDefinition {
+            name: "talk".to_string(),
+            description: "Talk to the rubber duck for silent wisdom.".to_string(),
+            input_schema: json!({
+                "type": "object",
+                "properties": {
+                    "message": {
+                        "type": "string",
+                        "description": "What you say to the rubber duck"
+                    }
+                }
+            }),
+        },
+        ToolDefinition {
+            name: "drink".to_string(),
+            description: "Drink from the lake or available water to restore hydration.".to_string(),
+            input_schema: json!({
+                "type": "object",
+                "properties": {}
+            }),
+        },
+        ToolDefinition {
+            name: "sleep".to_string(),
+            description: "Sleep for a while. Restores energy and, when well-fed and hydrated, heals you.".to_string(),
             input_schema: json!({
                 "type": "object",
                 "properties": {}
@@ -170,6 +239,19 @@ pub fn get_tool_definitions() -> Vec<ToolDefinition> {
                         "description": "How long to wait: short (10 min), medium (30 min), or long (1 hour)",
                         "enum": ["short", "medium", "long"],
                         "default": "short"
+                    }
+                }
+            }),
+        },
+        ToolDefinition {
+            name: "kick".to_string(),
+            description: "Kick a nearby tree to try and shake loose any fruit.".to_string(),
+            input_schema: json!({
+                "type": "object",
+                "properties": {
+                    "target": {
+                        "type": "string",
+                        "description": "Optional target to kick (e.g., 'tree')"
                     }
                 }
             }),
