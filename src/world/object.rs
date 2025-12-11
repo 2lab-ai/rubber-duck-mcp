@@ -82,7 +82,16 @@ impl ObjectKind {
             ObjectKind::Table => "table".to_string(),
             ObjectKind::Wall => "wall".to_string(),
             ObjectKind::Boulder => "boulder".to_string(),
-            ObjectKind::Corpse(corpse) => format!("{} carcass", corpse.species.name()),
+            ObjectKind::Corpse(corpse) => {
+                let name = corpse.species.name();
+                if corpse.freshness > 90 {
+                    format!("old {} carcass", name)
+                } else if corpse.freshness > 30 {
+                    format!("weathered {} carcass", name)
+                } else {
+                    format!("{} carcass", name)
+                }
+            }
             ObjectKind::GenericStructure(name) => name.clone(),
         }
     }

@@ -1,4 +1,4 @@
-use crate::entity::{Blueprint, BookEntry, FireState, Item, Room};
+use crate::entity::{Blueprint, BookEntry, FireState, Item, Room, Species};
 use crate::persistence::GameState;
 use crate::world::{Biome, Position, TimeOfDay, Weather, WorldMap};
 use rand::Rng;
@@ -972,6 +972,71 @@ pub fn try_use(
                 return InteractionResult::Failure(
                     "You don't see a suitable carcass here to butcher.".to_string(),
                 );
+            }
+        }
+    }
+
+    // 3c. Feeding animal companions (dogs and cats)
+    if matches!(
+        item,
+        Item::RawMeat
+            | Item::CookedMeat
+            | Item::Fish
+            | Item::SmallFish
+            | Item::BigFish
+            | Item::CookedFish
+    ) {
+        if let Some(target) = target_str {
+            let t = target.to_lowercase();
+            if t.contains("dog") || t.contains("cat") {
+                let pos = state.player.position;
+                let mut best_index: Option<usize> = None;
+                let mut best_distance = f32::MAX;
+
+                for (idx, w) in state.wildlife.iter().enumerate() {
+                    if !matches!(w.species, Species::Dog | Species::Cat) {
+                        continue;
+                    }
+                    let dist = pos.distance_to(&w.position);
+                    if dist <= 2.0 && dist < best_distance {
+                        best_distance = dist;
+                        best_index = Some(idx);
+                    }
+                }
+
+                let idx = match best_index {
+                    Some(i) => i,
+                    None => {
+                        return InteractionResult::Failure(
+                            "You don't see a dog or cat close enough to feed.".to_string(),
+                        )
+                    }
+                };
+
+                if !state.player.inventory.remove(&item, 1) {
+                    return InteractionResult::Failure(
+                        "You don't have any food to offer right now.".to_string(),
+                    );
+                }
+
+                if let Some(w) = state.wildlife.get_mut(idx) {
+                    w.tamed = true;
+                }
+
+                state.player.modify_mood(4.0);
+
+                let animal_name = state.wildlife.get(idx).map(|w| w.species.name()).unwrap_or("animal");
+                let message = format!(
+                    "You offer the {}. The {} eats gratefully and falls into step beside you.",
+                    item.name(),
+                    animal_name
+                );
+
+                return InteractionResult::ActionSuccess {
+                    message,
+                    time_cost: 1,
+                    energy_cost: 1.0,
+                };
             }
         }
     }

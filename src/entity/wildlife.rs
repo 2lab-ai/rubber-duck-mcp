@@ -38,6 +38,29 @@ pub enum Species {
     // General
     Butterfly,
     Bee,
+    Pig,
+    // Extra common game wildlife (herbivores)
+    Boar,
+    Goat,
+    Sheep,
+    Cow,
+    Horse,
+    Moose,
+    Elk,
+    Antelope,
+    Bison,
+    Camel,
+
+    // Extra common game wildlife (carnivores)
+    Bear,
+    Lynx,
+    Cougar,
+    Tiger,
+    Hyena,
+
+    // Companions
+    Dog,
+    Cat,
 }
 
 impl Species {
@@ -66,6 +89,24 @@ impl Species {
             Species::Dragonfly => "dragonfly",
             Species::Butterfly => "butterfly",
             Species::Bee => "bee",
+            Species::Pig => "pig",
+            Species::Boar => "boar",
+            Species::Goat => "goat",
+            Species::Sheep => "sheep",
+            Species::Cow => "cow",
+            Species::Horse => "horse",
+            Species::Moose => "moose",
+            Species::Elk => "elk",
+            Species::Antelope => "antelope",
+            Species::Bison => "bison",
+            Species::Camel => "camel",
+            Species::Bear => "bear",
+            Species::Lynx => "lynx",
+            Species::Cougar => "cougar",
+            Species::Tiger => "tiger",
+            Species::Hyena => "hyena",
+            Species::Dog => "dog",
+            Species::Cat => "cat",
         }
     }
 
@@ -99,14 +140,28 @@ impl Species {
             Species::Butterfly | Species::Bee => {
                 vec![Biome::SpringForest, Biome::MixedForest, Biome::Oasis]
             }
-            // Default fallback (should not normally be used)
+            Species::Pig | Species::Boar | Species::Goat | Species::Sheep | Species::Cow => {
+                vec![Biome::Path, Biome::Clearing, Biome::MixedForest]
+            }
+            Species::Horse | Species::Elk | Species::Bison | Species::Antelope => {
+                vec![Biome::SpringForest, Biome::MixedForest]
+            }
+            Species::Moose => vec![Biome::WinterForest, Biome::MixedForest],
+            Species::Camel => vec![Biome::Desert, Biome::Oasis],
+            Species::Bear => vec![Biome::SpringForest, Biome::MixedForest, Biome::WinterForest],
+            Species::Lynx | Species::Cougar | Species::Tiger | Species::Hyena => {
+                vec![Biome::SpringForest, Biome::MixedForest]
+            }
+            Species::Dog | Species::Cat => vec![Biome::Path, Biome::Clearing, Biome::MixedForest],
         }
     }
 
     pub fn activity_schedule(&self) -> ActivitySchedule {
         match self {
             Species::Owl | Species::Wolf | Species::Scorpion => ActivitySchedule::Nocturnal,
-            Species::Deer | Species::Rabbit | Species::Fox => ActivitySchedule::Crepuscular,
+            Species::Deer | Species::Rabbit | Species::Fox | Species::Pig => {
+                ActivitySchedule::Crepuscular
+            }
             _ => ActivitySchedule::Diurnal,
         }
     }
@@ -123,6 +178,13 @@ impl Species {
                 | Species::Rattlesnake
                 | Species::Scorpion
                 | Species::Heron
+                | Species::Bear
+                | Species::Lynx
+                | Species::Cougar
+                | Species::Tiger
+                | Species::Hyena
+                | Species::Dog
+                | Species::Cat
         )
     }
 
@@ -257,6 +319,18 @@ impl Species {
 
             (Species::Butterfly, _) => format!("A {} drifts lazily among the wildflowers.", name),
             (Species::Bee, _) => format!("A {} buzzes busily from flower to flower.", name),
+            (Species::Pig, Behavior::Grazing) => {
+                "A small pig snuffles through the grass, snout rooting gently in the soil.".to_string()
+            }
+            (Species::Pig, Behavior::Resting) => {
+                "A small pig lies on its side in the clearing, sides rising and falling with slow breaths.".to_string()
+            }
+            (Species::Pig, Behavior::Moving) => {
+                "A small pig trots along the path near the cabin, ears flicking at every sound.".to_string()
+            }
+            (Species::Pig, Behavior::Alert) => {
+                "A small pig freezes for a moment, nose lifted as it tests the air.".to_string()
+            }
 
             (_, Behavior::Sleeping) => format!("A {} sleeps peacefully.", name),
             (_, Behavior::Fleeing) => format!("A {} darts away, startled.", name),
@@ -394,6 +468,8 @@ pub struct Wildlife {
     pub body: Body,
     #[serde(default = "Wildlife::default_alive")]
     pub alive: bool,
+    #[serde(default)]
+    pub tamed: bool,
 }
 
 impl Wildlife {
@@ -405,6 +481,7 @@ impl Wildlife {
             behavior: Behavior::Resting,
             body: Body::for_species(species),
             alive: true,
+            tamed: false,
         }
     }
 
@@ -413,6 +490,11 @@ impl Wildlife {
     }
 
     pub fn update(&mut self, time: TimeOfDay, map: &WorldMap, weather: &RegionalWeather) {
+        // Tamed companions mostly let the game state drive their movement.
+        if self.tamed && matches!(self.species, Species::Dog | Species::Cat) {
+            self.behavior = Behavior::Moving;
+            return;
+        }
         let mut rng = rand::thread_rng();
         let weather_here = weather.get_for_position(self.position.row, self.position.col);
 
@@ -511,6 +593,11 @@ pub fn spawn_wildlife() -> Vec<Wildlife> {
     spawn_rect(Species::Heron, 1, -5..-1, -3..4);
     spawn_rect(Species::Frog, 2, -5..0, -3..4);
     spawn_rect(Species::Dragonfly, 2, -5..0, -3..4);
+
+    // Cabin-adjacent wildlife (Path / Clearing near cabin)
+    spawn_rect(Species::Pig, 3, 0..4, -1..2);
+    spawn_rect(Species::Dog, 1, 0..3, -2..2);
+    spawn_rect(Species::Cat, 1, -1..2, -2..2);
 
     wildlife
 }

@@ -334,30 +334,66 @@ impl GameState {
         let pos = self.player.position;
 
         let mut found_index: Option<usize> = None;
-        let mut species: Option<Species> = None;
 
         for (idx, po) in self.objects.placed.iter().enumerate() {
             if po.position == pos {
                 if let ObjectKind::Corpse(c) = &po.object.kind {
                     found_index = Some(idx);
-                    species = Some(c.species);
                     break;
                 }
             }
         }
 
         let idx = found_index?;
-        let species = species.unwrap();
+        let (species, freshness) = match &self.objects.placed.get(idx)?.object.kind {
+            ObjectKind::Corpse(c) => (c.species, c.freshness),
+            _ => return None,
+        };
 
-        let (meat, hide, fat) = match species {
+        let (base_meat, base_hide, base_fat) = match species {
             Species::Deer | Species::Caribou => (6, 2, 2),
             Species::Wolf | Species::Fox | Species::DesertFox | Species::SnowFox => (4, 1, 2),
             Species::SnowHare | Species::Rabbit => (2, 1, 1),
             _ => (3, 1, 1),
         };
 
+        // Simple freshness stages: fresh, aging, and spoiled.
+        let (meat, hide, fat, freshness_note) = if freshness < 30 {
+            (base_meat, base_hide, base_fat, None)
+        } else if freshness < 90 {
+            let meat = ((base_meat as f32) * 0.6).round() as i32;
+            let fat = ((base_fat as f32) * 0.7).round() as i32;
+            (
+                meat.max(0),
+                base_hide,
+                fat.max(0),
+                Some(
+                    "The carcass is no longer freshly killed, but you trim away the worst parts and salvage what you can.",
+                ),
+            )
+        } else {
+            let meat = 0;
+            let fat = (base_fat / 2).max(0);
+            (
+                meat,
+                base_hide,
+                fat,
+                Some(
+                    "Most of the meat has spoiled; you focus on hide and whatever fat still seems safe.",
+                ),
+            )
+        };
+
         if meat == 0 && hide == 0 && fat == 0 {
-            return None;
+            // Even a spoiled carcass at least teaches you what rot looks like.
+            if let Some(po) = self.objects.placed.get_mut(idx) {
+                po.object.kind =
+                    ObjectKind::GenericStructure("picked-over remains".to_string());
+            }
+            return Some(
+                "This carcass has spoiled too far to yield anything useful. You leave only scattered bones and feathers behind."
+                    .to_string(),
+            );
         }
 
         if meat > 0 {
@@ -379,10 +415,14 @@ impl GameState {
                 ObjectKind::GenericStructure("picked-over remains".to_string());
         }
 
-        Some(
-            "You carefully butcher the carcass, setting aside meat, hide, and fat for later use."
-                .to_string(),
-        )
+        let base_text =
+            "You carefully butcher the carcass, setting aside meat, hide, and fat for later use.";
+        let message = match freshness_note {
+            Some(note) => format!("{} {}", note, base_text),
+            None => base_text.to_string(),
+        };
+
+        Some(message)
     }
 
     pub fn refresh_blueprint_knowledge(&mut self, push_messages: bool) {
@@ -473,6 +513,7 @@ impl GameState {
                 "In gentle time, fruit slowly returns. Don't strip every tree bare at once; patience feeds you twice.",
                 "Books, maps and strange objects in the cabin hint at deeper systems. Not all of them explain themselves immediately.",
                 "If you feel lost, look around, meditate by the lake, or talk to the rubber duck. Sometimes the quiet answers first.",
+                "On the path just south of the cabin, you may notice a small carcass and a simple knife nearby. When you feel ready, stand by the carcass, 'take knife', then 'use knife on carcass' (or 'use knife on pig') to practice butchering and carry the meat inside to cook over the hearth.",
             ],
             false,
         );
@@ -901,7 +942,7 @@ impl GameState {
         });
         if !exists {
             let corpse = WorldObject::new(ObjectKind::Corpse(Corpse {
-                species: Species::Caribou,
+                species: Species::Pig,
                 freshness: 0,
             }));
             self.objects.add("starter_pig", pig_pos, corpse);
@@ -1095,11 +1136,14 @@ impl GameState {
             self.weather.update();
         }
 
+        let mut rng = rand::thread_rng();
         // Update wildlife
         let tod = self.time.time_of_day();
         for w in &mut self.wildlife {
             w.update(tod, map, &self.weather);
         }
+        self.update_companions(map);
+        self.maybe_spawn_edge_wildlife(map, &mut rng);
 
         // Update fireplace and collect any warnings
         if let Some(cabin) = self.cabin_state_mut() {
@@ -1108,9 +1152,9 @@ impl GameState {
             }
         }
 
-        let mut rng = rand::thread_rng();
         self.update_trees(map, &mut rng);
         self.update_forage_nodes(map, &mut rng);
+        self.tick_corpses();
 
         // Hunger / thirst decay
         self.player.modify_fullness(-0.5);
@@ -1140,6 +1184,131 @@ impl GameState {
 
         // Keep cognition in sync with injuries, health, and rest
         self.update_player_cognition();
+    }
+
+    fn tick_corpses(&mut self) {
+        for po in &mut self.objects.placed {
+            if let ObjectKind::Corpse(corpse) = &mut po.object.kind {
+                corpse.freshness = corpse.freshness.saturating_add(1);
+            }
+        }
+    }
+
+    fn update_companions(&mut self, map: &WorldMap) {
+        let player_pos = self.player.position;
+
+        for w in &mut self.wildlife {
+            if !w.tamed {
+                continue;
+            }
+            if !matches!(w.species, Species::Dog | Species::Cat) {
+                continue;
+            }
+
+            let dist = w.position.distance_to(&player_pos);
+            if dist <= 1.5 {
+                continue;
+            }
+
+            let dr = (player_pos.row - w.position.row).signum();
+            let dc = (player_pos.col - w.position.col).signum();
+            let new_pos = Position::new(w.position.row + dr, w.position.col + dc);
+            if let Some((r, c)) = new_pos.as_usize() {
+                if map.is_walkable(r, c) {
+                    w.position = new_pos;
+                }
+            }
+        }
+    }
+
+    fn maybe_spawn_edge_wildlife(&mut self, map: &WorldMap, rng: &mut impl Rng) {
+        if self.wildlife.len() > 80 {
+            return;
+        }
+        if !rng.gen_bool(0.04) {
+            return;
+        }
+
+        let edge = rng.gen_range(0..4);
+        let (row_range, col_range) = match edge {
+            0 => (-12..-4, -4..5),  // north band
+            1 => (4..12, -4..5),    // south band
+            2 => (-4..5, 7..13),    // east band
+            _ => (-4..5, -14..-7),  // west band
+        };
+
+        let row = rng.gen_range(row_range);
+        let col = rng.gen_range(col_range);
+        let pos = Position::new(row, col);
+        if let Some((r, c)) = pos.as_usize() {
+            if !map.is_walkable(r, c) {
+                return;
+            }
+        } else {
+            return;
+        }
+
+        let biome = pos
+            .as_usize()
+            .and_then(|(r, c)| map.get_tile(r, c).map(|t| t.biome))
+            .unwrap_or(Biome::MixedForest);
+
+        let species = match biome {
+            Biome::SpringForest | Biome::MixedForest => {
+                let choices = [
+                    Species::Deer,
+                    Species::Rabbit,
+                    Species::Squirrel,
+                    Species::Boar,
+                    Species::Goat,
+                    Species::Sheep,
+                    Species::Horse,
+                    Species::Bear,
+                    Species::Lynx,
+                    Species::Dog,
+                    Species::Cat,
+                ];
+                choices[rng.gen_range(0..choices.len())]
+            }
+            Biome::WinterForest => {
+                let choices = [
+                    Species::SnowFox,
+                    Species::Wolf,
+                    Species::Caribou,
+                    Species::SnowHare,
+                    Species::Moose,
+                    Species::Elk,
+                    Species::Bear,
+                ];
+                choices[rng.gen_range(0..choices.len())]
+            }
+            Biome::Desert | Biome::Oasis => {
+                let choices = [
+                    Species::DesertLizard,
+                    Species::Scorpion,
+                    Species::DesertFox,
+                    Species::Hawk,
+                    Species::Rattlesnake,
+                    Species::Camel,
+                    Species::Hyena,
+                ];
+                choices[rng.gen_range(0..choices.len())]
+            }
+            Biome::Lake | Biome::Path | Biome::Clearing | Biome::BambooGrove => {
+                let choices = [
+                    Species::Duck,
+                    Species::Heron,
+                    Species::Frog,
+                    Species::Pig,
+                    Species::Goat,
+                    Species::Dog,
+                    Species::Cat,
+                ];
+                choices[rng.gen_range(0..choices.len())]
+            }
+        };
+
+        self.wildlife.push(Wildlife::new(species, pos));
     }
 
     fn update_forage_nodes(&mut self, map: &WorldMap, rng: &mut impl Rng) {

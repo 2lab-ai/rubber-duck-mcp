@@ -1,7 +1,8 @@
-use super::body::Body;
+use super::body::{Body, BodyHitEvent};
 use super::blueprint::Blueprint;
 use super::objects::Item;
 use crate::world::{Direction, Position};
+use rand::Rng;
 use serde::{Deserialize, Serialize};
 use std::collections::{HashMap, HashSet};
 
@@ -379,6 +380,21 @@ impl Player {
         self.health = (self.health + delta).clamp(0.0, 100.0);
     }
 
+    /// Apply physical damage to a random body part and keep legacy health/mood roughly in sync.
+    pub fn apply_body_damage(&mut self, damage: f32) -> Option<BodyHitEvent> {
+        if damage <= 0.0 {
+            return None;
+        }
+        let mut rng = rand::thread_rng();
+        let hit = self.body.apply_random_damage(&mut rng, damage)?;
+
+        // Mirror the impact into the simple health/mood bars so existing UI stays meaningful.
+        self.modify_health(-damage);
+        self.modify_mood(-damage.min(5.0));
+
+        Some(hit)
+    }
+
     pub fn modify_warmth(&mut self, delta: f32) {
         self.warmth = (self.warmth + delta).clamp(0.0, 100.0);
     }
@@ -412,13 +428,34 @@ impl Player {
     /// Effective skill level after cognition penalties/bonuses
     pub fn effective_skill(&self, skill: &str) -> u8 {
         let base = self.skills.get(skill) as f32;
-        let factor = match self.cognition {
+        let cognition_factor = match self.cognition {
             c if c >= 90.0 => 1.05,
             c if c >= 70.0 => 1.0,
             c if c >= 50.0 => 0.9,
             c if c >= 30.0 => 0.75,
             _ => 0.6,
         };
+
+        // Start from cognition, then apply gentle penalties for injured hands/arms on physical skills.
+        let mut factor = cognition_factor;
+        let requires_hands = matches!(
+            skill,
+            "woodcutting"
+                | "fire_making"
+                | "foraging"
+                | "stonemasonry"
+                | "survival"
+                | "tailoring"
+                | "cooking"
+        );
+        if requires_hands {
+            let hand_health = self.body.manipulation_factor();
+            // Even with badly injured arms you can still attempt tasks,
+            // but precision drops sharply as hand health falls.
+            let hand_factor = 0.4 + hand_health * 0.6;
+            factor *= hand_factor;
+        }
+
         let value = (base * factor).round().clamp(1.0, 100.0);
         value as u8
     }

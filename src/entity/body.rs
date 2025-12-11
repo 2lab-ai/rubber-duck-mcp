@@ -84,7 +84,21 @@ impl Body {
 
     pub fn for_species(species: Species) -> Self {
         match species {
-            Species::Deer | Species::Caribou | Species::SnowHare | Species::Rabbit => Self {
+            Species::Deer
+            | Species::Caribou
+            | Species::SnowHare
+            | Species::Rabbit
+            | Species::Pig
+            | Species::Boar
+            | Species::Goat
+            | Species::Sheep
+            | Species::Cow
+            | Species::Horse
+            | Species::Moose
+            | Species::Elk
+            | Species::Antelope
+            | Species::Bison
+            | Species::Camel => Self {
                 parts: vec![
                     BodyPart::new(BodyPartKind::Head, 30.0, true, false, false, false),
                     BodyPart::new(BodyPartKind::Torso, 70.0, true, false, false, false),
@@ -94,7 +108,17 @@ impl Body {
                     BodyPart::new(BodyPartKind::BackRightLeg, 40.0, false, true, false, false),
                 ],
             },
-            Species::Wolf | Species::Fox | Species::DesertFox | Species::SnowFox => Self {
+            Species::Wolf
+            | Species::Fox
+            | Species::DesertFox
+            | Species::SnowFox
+            | Species::Bear
+            | Species::Lynx
+            | Species::Cougar
+            | Species::Tiger
+            | Species::Hyena
+            | Species::Dog
+            | Species::Cat => Self {
                 parts: vec![
                     BodyPart::new(BodyPartKind::Head, 28.0, true, false, false, false),
                     BodyPart::new(BodyPartKind::Torso, 55.0, true, false, false, false),
@@ -137,6 +161,16 @@ impl Body {
         } else {
             let sum: f32 = movers.iter().map(|p| p.ratio()).sum();
             (sum / movers.len() as f32).clamp(0.0, 1.0)
+        }
+    }
+
+    pub fn manipulation_factor(&self) -> f32 {
+        let manipulators: Vec<_> = self.parts.iter().filter(|p| p.manipulation).collect();
+        if manipulators.is_empty() {
+            1.0
+        } else {
+            let sum: f32 = manipulators.iter().map(|p| p.ratio()).sum();
+            (sum / manipulators.len() as f32).clamp(0.0, 1.0)
         }
     }
 
@@ -218,4 +252,3 @@ impl Body {
 pub fn is_adjacent(a: &Position, b: &Position) -> bool {
     a.distance_to(b) <= 1.5
 }
-

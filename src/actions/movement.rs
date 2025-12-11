@@ -80,9 +80,18 @@ pub fn try_move(
     player.position = new_pos;
     player.mark_visited();
     player.face(dir);
-    player.modify_energy(-1.0); // Movement costs a little energy
+    // Basic movement always works, but injured legs make it slower and more tiring.
+    let movement_factor = player.body.movement_factor();
+    let (verb, energy_cost) = if movement_factor >= 0.9 {
+        ("walk", 1.0)
+    } else if movement_factor >= 0.6 {
+        ("walk carefully", 1.5)
+    } else {
+        ("limp", 2.0)
+    };
+    player.modify_energy(-energy_cost);
 
-    MoveResult::Success(format!("You walk {}.", dir_name(dir)))
+    MoveResult::Success(format!("You {} {}.", verb, dir_name(dir)))
 }
 
 fn handle_room_movement(

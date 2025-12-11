@@ -166,6 +166,13 @@ impl WorldMap {
         let tile_type = Self::determine_tile_type(world_row, world_col, biome);
 
         let mut tile = Tile::new(tile_type, biome);
+
+        // Place a starter knife on the path just south of the cabin so new players
+        // naturally notice it near the tutorial carcass.
+        if world_row == 1 && world_col == 0 {
+            tile.items.add(Item::Knife, 1);
+        }
+
         if world_row.abs() == MAP_EXTENT || world_col.abs() == MAP_EXTENT {
             tile.walkable = false; // Impassable border
         }

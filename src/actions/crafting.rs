@@ -362,7 +362,7 @@ fn try_chop(player: &mut Player, wood_shed: &mut WoodShed) -> CraftResult {
     } else {
         // Failure
         let damage = rng.gen_range(1.0..5.0);
-        player.modify_health(-damage);
+        let _ = player.apply_body_damage(damage);
 
         CraftResult::PartialSuccess(format!(
             "The axe glances off at an awkward angle. You wince as the jarring impact sends pain through your arms. (-{:.1} health)",
@@ -657,7 +657,7 @@ fn try_chop_tree(
 
     if roll > success_chance {
         let damage = rng.gen_range(1.0..3.0);
-        player.modify_health(-damage);
+        let _ = player.apply_body_damage(damage);
         let mut msg = format!(
             "Your swing glances off the trunk, jarring your arms (-{:.1} health). {}",
             damage,
