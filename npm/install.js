@@ -4,6 +4,7 @@ const { execSync } = require("node:child_process");
 const fs = require("node:fs");
 const os = require("node:os");
 const path = require("node:path");
+const { setTimeout: delay } = require("node:timers/promises");
 
 const pkg = require("./package.json");
 const version = pkg.version;
@@ -42,49 +43,79 @@ function run(cmd) {
   execSync(cmd, { stdio: "inherit" });
 }
 
-console.log(`Fetching ${binName} ${version} for ${target}...`);
-
-try {
-  if (isWindows) {
-    run(`powershell -Command "Invoke-WebRequest -Uri  -OutFile "`);
-    run(`powershell -Command "Expand-Archive -Path  -DestinationPath  -Force"`);
-  } else {
-    run(`curl -fL ${downloadUrl} -o "${archivePath}"`);
-    run(`tar -xJf "${archivePath}" -C "${nativeDir}" --strip-components=1`);
-  }
-
-  const ext = isWindows ? ".exe" : "";
-  const finalBinPath = path.join(nativeDir, binName + ext);
-
-  function findBinary(start) {
-    for (const entry of fs.readdirSync(start, { withFileTypes: true })) {
-      const full = path.join(start, entry.name);
-      if (entry.isFile() && entry.name === binName + ext) {
-        return full;
+async function waitForRelease(url) {
+  const maxMs = 10 * 60 * 1000; // 10 minutes
+  const intervalMs = 10 * 1000; // 10 seconds
+  const deadline = Date.now() + maxMs;
+  while (true) {
+    try {
+      execSync(`curl -sfI ${url}`, { stdio: "ignore" });
+      return;
+    } catch (err) {
+      if (Date.now() >= deadline) {
+        throw new Error(`Timed out waiting for release asset: ${url}`);
       }
-      if (entry.isDirectory()) {
-        const found = findBinary(full);
-        if (found) return found;
-      }
+      console.log(`Waiting for release asset to appear... (${url})`);
+      await delay(intervalMs);
     }
-    return null;
   }
-
-  const located = findBinary(nativeDir);
-  if (!located) {
-    throw new Error("Binary not found after extraction");
-  }
-
-  if (located !== finalBinPath) {
-    fs.copyFileSync(located, finalBinPath);
-  }
-
-  if (!isWindows) {
-    fs.chmodSync(finalBinPath, 0o755);
-  }
-
-  console.log(`Installed ${binName} ${version} -> ${finalBinPath}`);
-} catch (err) {
-  console.error(`Failed to install binary: ${err.message}`);
-  process.exit(1);
 }
+
+async function main() {
+  console.log(`Fetching ${binName} ${version} for ${target}...`);
+  await waitForRelease(downloadUrl);
+
+  try {
+    if (isWindows) {
+      run(
+        `powershell -Command "Invoke-WebRequest -Uri '${downloadUrl}' -OutFile '${archivePath}'"`
+      );
+      run(
+        `powershell -Command "Expand-Archive -Path '${archivePath}' -DestinationPath '${nativeDir}' -Force"`
+      );
+    } else {
+      run(`curl -fL ${downloadUrl} -o "${archivePath}"`);
+      run(`tar -xJf "${archivePath}" -C "${nativeDir}" --strip-components=1`);
+    }
+
+    const ext = isWindows ? ".exe" : "";
+    const finalBinPath = path.join(nativeDir, binName + ext);
+
+    function findBinary(start) {
+      for (const entry of fs.readdirSync(start, { withFileTypes: true })) {
+        const full = path.join(start, entry.name);
+        if (entry.isFile() && entry.name === binName + ext) {
+          return full;
+        }
+        if (entry.isDirectory()) {
+          const found = findBinary(full);
+          if (found) return found;
+        }
+      }
+      return null;
+    }
+
+    const located = findBinary(nativeDir);
+    if (!located) {
+      throw new Error("Binary not found after extraction");
+    }
+
+    if (located !== finalBinPath) {
+      fs.copyFileSync(located, finalBinPath);
+    }
+
+    if (!isWindows) {
+      fs.chmodSync(finalBinPath, 0o755);
+    }
+
+    console.log(`Installed ${binName} ${version} -> ${finalBinPath}`);
+  } catch (err) {
+    console.error(`Failed to install binary: ${err.message}`);
+    process.exit(1);
+  }
+}
+
+main().catch((err) => {
+  console.error(`Install failed: ${err.message}`);
+  process.exit(1);
+});
