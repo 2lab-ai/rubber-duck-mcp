@@ -1,0 +1,46 @@
+{
+  "name": "@2lab.ai/rubber-duck-mcp",
+  "version": "0.1.0",
+  "description": "Prebuilt MCP server binary wrapper for rubber-duck-mcp",
+  "bin": {
+    "rubber-duck-mcp": "bin/rubber-duck-mcp.js"
+  },
+  "scripts": {
+    "postinstall": "node install.js"
+  },
+  "files": [
+    "bin/",
+    "install.js",
+    "package.json"
+  ],
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/2lab-ai/rubber-duck-mcp.git"
+  },
+  "bugs": {
+    "url": "https://github.com/2lab-ai/rubber-duck-mcp/issues"
+  },
+  "homepage": "https://github.com/2lab-ai/rubber-duck-mcp",
+  "keywords": [
+    "mcp",
+    "server",
+    "claude",
+    "rubber-duck"
+  ],
+  "engines": {
+    "node": ">=18"
+  },
+  "os": [
+    "darwin",
+    "linux",
+    "win32"
+  ],
+  "cpu": [
+    "x64",
+    "arm64"
+  ],
+  "license": "UNLICENSED",
+  "publishConfig": {
+    "access": "public"
+  }
+}

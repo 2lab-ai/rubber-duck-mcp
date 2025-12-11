@@ -14,3 +14,6 @@ Thumbs.db
 # Environment
 .env
 .env.local
+npm/node_modules/
+npm/bin/native/
+npm/package-lock.json
