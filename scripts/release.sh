@@ -111,6 +111,16 @@ fi
 
 pushd npm >/dev/null
 PUBLISH_LOG=$(mktemp)
+TEMP_NPMRC=$(mktemp)
+
+if [[ -n "${NPM_TOKEN:-}" ]]; then
+  {
+    echo "//registry.npmjs.org/:_authToken=${NPM_TOKEN}"
+    echo "registry=https://registry.npmjs.org/"
+  } >"$TEMP_NPMRC"
+  export NPM_CONFIG_USERCONFIG="$TEMP_NPMRC"
+  echo "Using NPM_TOKEN for auth via temp npmrc."
+fi
 echo "Publishing to npm..."
 if npm publish --access public $OTP_ARG >"$PUBLISH_LOG" 2>&1; then
   cat "$PUBLISH_LOG"
@@ -134,6 +144,7 @@ else
   fi
 fi
 rm -f "$PUBLISH_LOG"
+rm -f "$TEMP_NPMRC"
 popd >/dev/null
 
 echo "Release pipeline kicked off for v$NEW_VERSION"
