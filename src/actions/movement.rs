@@ -56,6 +56,7 @@ pub fn try_move(
             );
         }
         player.position = new_pos;
+        player.mark_visited();
         player.enter_room(Room::CabinMain);
         return MoveResult::RoomTransition(
             "You push open the door and step into the cabin.".to_string(),
@@ -64,6 +65,7 @@ pub fn try_move(
 
     // Normal movement
     player.position = new_pos;
+    player.mark_visited();
     player.face(dir);
     player.modify_energy(-1.0); // Movement costs a little energy
 

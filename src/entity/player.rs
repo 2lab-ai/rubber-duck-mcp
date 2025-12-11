@@ -2,7 +2,7 @@ use super::blueprint::Blueprint;
 use super::objects::Item;
 use crate::world::{Direction, Position};
 use serde::{Deserialize, Serialize};
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct SkillProgress {
@@ -257,6 +257,8 @@ pub struct Player {
     pub position: Position,
     pub facing: Direction,
     pub room: Option<Room>,
+    #[serde(default = "Player::default_visited")]
+    pub visited: HashSet<Position>,
 
     // Stats
     pub health: f32, // 0-100
@@ -283,10 +285,15 @@ pub struct Player {
 
 impl Player {
     pub fn new() -> Self {
+        let mut visited = HashSet::new();
+        let start_pos = Position::new(5, 0);
+        visited.insert(start_pos);
+
         Self {
-            position: Position::new(5, 0), // Start south of cabin on the path
+            position: start_pos, // Start south of cabin on the path
             facing: Direction::North,
             room: None,
+            visited,
 
             health: 100.0,
             warmth: 50.0,
@@ -303,12 +310,17 @@ impl Player {
         }
     }
 
+    pub fn default_visited() -> HashSet<Position> {
+        HashSet::new()
+    }
+
     pub fn is_indoor(&self) -> bool {
         self.room.as_ref().map(|r| r.is_indoor()).unwrap_or(false)
     }
 
     pub fn move_to(&mut self, pos: Position) {
         self.position = pos;
+        self.mark_visited();
     }
 
     pub fn face(&mut self, dir: Direction) {
@@ -321,6 +333,10 @@ impl Player {
 
     pub fn exit_room(&mut self) {
         self.room = None;
+    }
+
+    pub fn mark_visited(&mut self) {
+        self.visited.insert(self.position);
     }
 
     pub fn modify_health(&mut self, delta: f32) {

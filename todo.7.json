@@ -16,6 +16,6 @@
   "notes": [
     "Keep serialization backward compatible; changes mostly impact map generation and runtime weather/temperature logic.",
     "Cabin/WoodShed objects stay anchored at their coordinates.",
-    "Remaining gap: web map fog-of-war for unvisited tiles is still pending."
+    "Visited tiles are tracked in player state; web map now fogs unvisited areas."
   ]
 }

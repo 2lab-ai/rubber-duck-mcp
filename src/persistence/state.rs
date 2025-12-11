@@ -150,6 +150,10 @@ impl GameState {
         }
     }
 
+    fn ensure_player_visit(&mut self) {
+        self.player.mark_visited();
+    }
+
     fn ensure_book_registry(&mut self) {
         let mut insert_if_missing = |id: &str, title: &str, pages: Vec<&str>, writable: bool| {
             if !self.books.contains_key(id) {
@@ -478,6 +482,7 @@ impl GameState {
         state.ensure_book_registry();
         state.bootstrap_structures();
         state.ensure_cabin_books();
+        state.ensure_player_visit();
         state.seed_bamboo_grove();
         state.seed_tree_population(map, &mut rng, 10);
         state
@@ -519,6 +524,7 @@ impl GameState {
                     state.ensure_tree_objects_from_legacy();
                     state.bootstrap_structures();
                     state.ensure_cabin_books();
+                    state.ensure_player_visit();
                     state.seed_bamboo_grove();
 
                     let mut rng = rand::thread_rng();

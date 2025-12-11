@@ -288,7 +288,7 @@ impl Default for WorldMap {
     }
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Hash)]
 pub struct Position {
     pub row: i32,
     pub col: i32,

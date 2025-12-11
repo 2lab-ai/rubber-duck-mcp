@@ -198,8 +198,10 @@ function renderMap(data) {
     for (let c=0; c<data.width; c++) {
       const tile = data.tiles[r][c];
       const isPlayer = data.player && data.player.row === r && data.player.col === c;
+      const visited = tile.visited !== false;
       const glyph = (() => {
         if (isPlayer) return '@';
+        if (!visited) return '?';
         switch (tile.tile) {
           case 'Cabin': return 'C';
           case 'WoodShed': return 'W';
@@ -210,7 +212,11 @@ function renderMap(data) {
           default: return '.';
         }
       })();
-      const color = isPlayer ? palette.Player : (palette[tile.biome] || '#9ea7b8');
+      const color = isPlayer
+        ? palette.Player
+        : visited
+          ? (palette[tile.biome] || '#9ea7b8')
+          : '#3a4353';
       line += `<span style="color:${color}">${glyph}</span>`;
     }
     lines.push(line);
@@ -248,12 +254,6 @@ tick();
 }
 
 #[derive(serde::Serialize)]
-struct TileView {
-    biome: String,
-    tile: String,
-}
-
-#[derive(serde::Serialize)]
 struct StateView {
     width: usize,
     height: usize,
@@ -267,15 +267,29 @@ struct PositionView {
     col: usize,
 }
 
+#[derive(serde::Serialize)]
+struct TileView {
+    biome: String,
+    tile: String,
+    visited: bool,
+}
+
 fn build_state_json(state_path: &PathBuf, map: &world::WorldMap) -> String {
     let loaded_state = persistence::GameState::load(state_path).ok();
     let object_view = loaded_state.as_ref().map(|s| &s.objects);
+    let visited_view = loaded_state.as_ref().map(|s| &s.player.visited);
+    let player_world_pos = loaded_state.as_ref().map(|s| s.player.position);
 
     let mut tiles = Vec::with_capacity(world::map::MAP_HEIGHT);
     for r in 0..world::map::MAP_HEIGHT {
         let mut row = Vec::with_capacity(world::map::MAP_WIDTH);
         for c in 0..world::map::MAP_WIDTH {
             if let Some(t) = map.get_tile(r, c) {
+                let world_pos = world::Position::new(
+                    r as i32 - world::map::MAP_ORIGIN_ROW,
+                    c as i32 - world::map::MAP_ORIGIN_COL,
+                );
+
                 let mut tile = match t.tile_type {
                     world::TileType::Lake => "Lake",
                     world::TileType::Path => "Path",
@@ -285,18 +299,14 @@ fn build_state_json(state_path: &PathBuf, map: &world::WorldMap) -> String {
                 .to_string();
 
                 if let Some(objects) = &object_view {
-                    let pos = world::Position::new(
-                        r as i32 - world::map::MAP_ORIGIN_ROW,
-                        c as i32 - world::map::MAP_ORIGIN_COL,
-                    );
                     if objects
-                        .objects_at(&pos)
+                        .objects_at(&world_pos)
                         .iter()
                         .any(|o| matches!(o.object.kind, world::ObjectKind::Cabin(_)))
                     {
                         tile = "Cabin".to_string();
                     } else if objects
-                        .objects_at(&pos)
+                        .objects_at(&world_pos)
                         .iter()
                         .any(|o| matches!(o.object.kind, world::ObjectKind::WoodShed(_)))
                     {
@@ -304,9 +314,15 @@ fn build_state_json(state_path: &PathBuf, map: &world::WorldMap) -> String {
                     }
                 }
 
+                let visited = match visited_view {
+                    Some(set) => set.contains(&world_pos),
+                    None => true,
+                } || player_world_pos.map(|p| p == world_pos).unwrap_or(false);
+
                 row.push(TileView {
                     biome: t.biome.name().to_string(),
                     tile,
+                    visited,
                 });
             }
         }
