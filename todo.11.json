@@ -1,0 +1,26 @@
+{
+  "task_id": 11,
+  "scope": "Survival Loop: Water/food cooking & boiling",
+  "goal": "Let players collect muddy water, boil it into clean water, and cook simple foods on a fire with weather/time influencing the effort.",
+  "decisions": [
+    "Reuse the kettle flow for water handling; treat filled kettles as muddy water and return clean water plus the empty kettle after boiling.",
+    "Add basic cooked outputs for fish and berries; require a lit fireplace (or fire) and adjust effort when severe weather makes cooking harder.",
+    "Keep items minimal: muddy/clean water consumables and cooked variants of fish/berries with modest hydration/fullness effects."
+  ],
+  "plan": [
+    "Add items for muddy_water, clean_water, cooked_fish, and roasted_berries with names/weights/descriptions.",
+    "Wire kettle flow: filling yields muddy water in the kettle; boiling over a lit hearth produces clean water and returns the kettle; allow tea brewing from clean water too.",
+    "Add cooking interactions for fish/berries on a lit fire with weather-aware time/energy tweaks; hook consumption effects for the new foods/drinks.",
+    "Run cargo check and update todo tracking."
+  ],
+  "notes": [
+    "No new cooking surfaces beyond the existing fireplace; campfire remains future work.",
+    "Weather impact kept lightweight: severe storms slightly increase cook time/energy."
+  ],
+  "status": "completed",
+  "progress": [
+    "Added muddy/clean water and cooked food items with descriptions/weights and kettle flow to boil lake water into clean water while returning the kettle.",
+    "Tea brewing accepts clean water (or hot kettle) and water filling/boiling messages guide muddy->clean usage.",
+    "Cooking fish/berries on a lit fireplace now produces cooked variants with weather-aware effort; consuming new foods/water affects fullness/hydration/mood."
+  ]
+}

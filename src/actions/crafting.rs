@@ -875,7 +875,8 @@ fn try_fill_kettle(player: &mut Player, map: &WorldMap) -> CraftResult {
     player.inventory.add(Item::WaterKettle, 1);
 
     CraftResult::Success(
-        "You dip the kettle into the clear lake water. It fills with a satisfying splash, the metal turning cold in your hands.".to_string()
+        "You dip the kettle into the lake and scoop up water. It's a bit murky — better boil it."
+            .to_string(),
     )
 }
 
@@ -898,10 +899,11 @@ fn try_heat_kettle(player: &mut Player, cabin: &Cabin) -> CraftResult {
     }
 
     player.inventory.remove(&Item::WaterKettle, 1);
-    player.inventory.add(Item::HotWaterKettle, 1);
+    player.inventory.add(Item::Kettle, 1);
+    player.inventory.add(Item::CleanWater, 1);
 
     CraftResult::Success(
-        "You set the kettle near the flames. Soon it begins to murmur and steam, water rolling at a happy boil.".to_string()
+        "You set the kettle near the flames. Soon it begins to murmur and steam. You pour out clean, boiled water.".to_string()
     )
 }
 
@@ -913,14 +915,11 @@ fn try_brew_herbal_tea(player: &mut Player, _cabin: &Cabin) -> CraftResult {
         );
     }
 
-    if !player.inventory.has(&Item::HotWaterKettle, 1) {
-        if player.inventory.has(&Item::WaterKettle, 1) {
-            return CraftResult::Failure(
-                "The water is still cold. Warm the kettle by the fire first.".to_string(),
-            );
-        }
+    let has_hot = player.inventory.has(&Item::HotWaterKettle, 1);
+    let has_clean = player.inventory.has(&Item::CleanWater, 1);
+    if !has_hot && !has_clean {
         return CraftResult::Failure(
-            "You need a kettle of hot water to steep the herbs.".to_string(),
+            "You need clean, hot water to steep the herbs. Boil lake water first.".to_string(),
         );
     }
 
@@ -932,10 +931,14 @@ fn try_brew_herbal_tea(player: &mut Player, _cabin: &Cabin) -> CraftResult {
         return CraftResult::Failure("You don't have any wild herbs to steep.".to_string());
     }
 
-    player.inventory.remove(&Item::HotWaterKettle, 1);
+    if has_hot {
+        player.inventory.remove(&Item::HotWaterKettle, 1);
+        player.inventory.add(Item::Kettle, 1);
+    } else {
+        player.inventory.remove(&Item::CleanWater, 1);
+    }
     player.inventory.remove(&Item::WildHerbs, 1);
     player.inventory.remove(&Item::TeaCup, 1);
-    player.inventory.add(Item::Kettle, 1);
     player.inventory.add(Item::HerbalTea, 1);
 
     let mut rng = rand::thread_rng();

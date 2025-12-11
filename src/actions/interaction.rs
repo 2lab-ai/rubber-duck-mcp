@@ -1,6 +1,6 @@
-use crate::entity::{Blueprint, BookEntry, Item, Room};
+use crate::entity::{Blueprint, BookEntry, FireState, Item, Room};
 use crate::persistence::GameState;
-use crate::world::WorldMap;
+use crate::world::{Weather, WorldMap};
 use rand::Rng;
 
 pub enum InteractionResult {
@@ -674,6 +674,60 @@ pub fn try_use(
         }
     }
 
+    // 3b. Cooking simple foods on fire
+    if item == Item::Fish || item == Item::WildBerry {
+        let in_cabin = matches!(state.player.room, Some(Room::CabinMain));
+        let fire_lit = state
+            .cabin_state()
+            .map(|c| !matches!(c.fireplace.state, FireState::Cold))
+            .unwrap_or(false);
+        if !in_cabin || !fire_lit {
+            return InteractionResult::Failure(
+                "You need to be by a lit fireplace to cook that right now.".to_string(),
+            );
+        }
+
+        let severe = {
+            let pos = state.player.position;
+            let weather_here = state.weather.get_for_position(pos.row, pos.col);
+            matches!(
+                weather_here,
+                Weather::Blizzard | Weather::HeavySnow | Weather::HeavyRain | Weather::Sandstorm
+            )
+        };
+        let mut time_cost = 2;
+        let mut energy_cost = 4.0;
+        if severe {
+            time_cost += 1;
+            energy_cost += 2.0;
+        }
+
+        if item == Item::Fish {
+            if !state.player.inventory.remove(&Item::Fish, 1) {
+                return InteractionResult::Failure("You don't have a fish to cook.".to_string());
+            }
+            state.player.inventory.add(Item::CookedFish, 1);
+            return InteractionResult::ActionSuccess {
+                message: "You grill the fish over the fire until it flakes easily.".to_string(),
+                time_cost,
+                energy_cost,
+            };
+        } else {
+            if state.player.inventory.count(&Item::WildBerry) < 2 {
+                return InteractionResult::Failure(
+                    "Gather at least a couple of berries to roast.".to_string(),
+                );
+            }
+            state.player.inventory.remove(&Item::WildBerry, 2);
+            state.player.inventory.add(Item::CookedBerries, 1);
+            return InteractionResult::ActionSuccess {
+                message: "You roast the berries, caramelizing their juices.".to_string(),
+                time_cost,
+                energy_cost,
+            };
+        }
+    }
+
     // Stone on Stone -> Sharp Stone
     if item == Item::Stone {
         if let Some(target) = target_str {
@@ -733,7 +787,13 @@ pub fn try_use(
     // 5. Consumption (Food/Drink)
     if matches!(
         item,
-        Item::Apple | Item::WildBerry | Item::HerbalTea | Item::Date
+        Item::Apple
+            | Item::WildBerry
+            | Item::HerbalTea
+            | Item::Date
+            | Item::CleanWater
+            | Item::CookedFish
+            | Item::CookedBerries
     ) {
         return handle_consumption(state, item);
     }
@@ -1080,7 +1140,32 @@ fn handle_consumption(state: &mut GameState, item: Item) -> InteractionResult {
             state.player.modify_fullness(15.0);
             "You eat the apple.".to_string()
         }
-        // ... other items
+        Item::WildBerry => {
+            state.player.modify_fullness(5.0);
+            state.player.modify_mood(2.0);
+            "You snack on the berries.".to_string()
+        }
+        Item::CleanWater => {
+            state.player.modify_hydration(25.0);
+            state.player.modify_energy(2.0);
+            "You drink the clean water. It tastes refreshing.".to_string()
+        }
+        Item::CookedFish => {
+            state.player.modify_fullness(25.0);
+            state.player.modify_mood(4.0);
+            "You eat the warm, cooked fish. Protein and warmth spread through you.".to_string()
+        }
+        Item::CookedBerries => {
+            state.player.modify_fullness(12.0);
+            state.player.modify_mood(6.0);
+            "You munch on the roasted berries. Sweet and tart.".to_string()
+        }
+        Item::HerbalTea => {
+            state.player.modify_hydration(15.0);
+            state.player.modify_mood(5.0);
+            state.player.modify_warmth(3.0);
+            "You sip the herbal tea, feeling calm and warm.".to_string()
+        }
         _ => format!("You consume the {}.", item.name()),
     };
 

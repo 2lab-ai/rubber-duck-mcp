@@ -9,6 +9,7 @@ pub enum Item {
     StoneKnife, // Crafted knife
     Matchbox,
     FishingRod,
+    Fish,
 
     // Resources
     Log,         // Unsplit log
@@ -56,17 +57,22 @@ pub enum Item {
     Kettle,         // For boiling water
     WaterKettle,    // Kettle with water
     HotWaterKettle, // Kettle with boiling water
-    HerbalTea,      // Finished tea!
+    MuddyWater,
+    CleanWater,
+    CookedFish,
+    CookedBerries,
+    HerbalTea, // Finished tea!
     RubberDuck,
 }
 
-const ALL_ITEMS: [Item; 45] = [
+const ALL_ITEMS: [Item; 50] = [
     Item::Axe,
     Item::StoneAxe,
     Item::Knife,
     Item::StoneKnife,
     Item::Matchbox,
     Item::FishingRod,
+    Item::Fish,
     Item::Log,
     Item::Stick,
     Item::Firewood,
@@ -104,6 +110,10 @@ const ALL_ITEMS: [Item; 45] = [
     Item::Kettle,
     Item::WaterKettle,
     Item::HotWaterKettle,
+    Item::MuddyWater,
+    Item::CleanWater,
+    Item::CookedFish,
+    Item::CookedBerries,
     Item::HerbalTea,
     Item::RubberDuck,
 ];
@@ -117,6 +127,7 @@ impl Item {
             Item::StoneKnife => "stone knife",
             Item::Matchbox => "matchbox",
             Item::FishingRod => "fishing rod",
+            Item::Fish => "raw fish",
             Item::Log => "log",
             Item::Stick => "stick",
             Item::Firewood => "firewood",
@@ -154,6 +165,10 @@ impl Item {
             Item::Kettle => "copper kettle",
             Item::WaterKettle => "kettle with water",
             Item::HotWaterKettle => "kettle with hot water",
+            Item::MuddyWater => "muddy water",
+            Item::CleanWater => "clean water",
+            Item::CookedFish => "cooked fish",
+            Item::CookedBerries => "roasted berries",
             Item::HerbalTea => "cup of herbal tea",
             Item::RubberDuck => "rubber duck",
         }
@@ -167,6 +182,7 @@ impl Item {
             Item::StoneKnife => &["flint knife", "shard"],
             Item::Matchbox => &["matches", "match box"],
             Item::FishingRod => &["rod", "fishing pole", "pole"],
+            Item::Fish => &["fish", "raw fish"],
             Item::Log => &["unsplit log", "wood"],
             Item::Stick => &["branch", "twig", "wood stick"],
             Item::Firewood => &["split firewood", "split wood"],
@@ -209,6 +225,10 @@ impl Item {
                 "hot water kettle",
                 "boiling water",
             ],
+            Item::MuddyWater => &["muddy water", "dirty water"],
+            Item::CleanWater => &["clean water", "boiled water", "safe water"],
+            Item::CookedFish => &["grilled fish", "cooked fish"],
+            Item::CookedBerries => &["roasted berries", "cooked berries"],
             Item::HerbalTea => &["tea", "herbal tea", "cup of tea"],
             Item::RubberDuck => &["duck", "yellow duck", "rubber ducky", "sage"],
         }
@@ -246,12 +266,17 @@ impl Item {
             Item::PlantFiber => "Tough plant fibers gathered from bushes.",
             Item::Cordage => "A crude rope braided from plant fibers.",
             Item::Campfire => "A ring of stones with wood, ready to be lit.",
+            Item::Fish => "A fresh fish, still slick from the water.",
             Item::Bamboo => "A straight, light bamboo stalk harvested near the lake.",
             Item::Paper => "A thin sheet of paper made from bamboo pulp.",
             Item::BlankBook => "A blank book with crisp pages, ready for a title.",
             Item::Book => "A bound book. Check its ID to read or write pages.",
             Item::TutorialBook => "A short guide left in the cabin.",
             Item::DeathNote => "A black notebook with ominous weight.",
+            Item::MuddyWater => "A container of unfiltered water. Boil before drinking.",
+            Item::CleanWater => "Clear, boiled water that looks safe to drink.",
+            Item::CookedFish => "Tender cooked fish, still steaming gently.",
+            Item::CookedBerries => "Roasted berries that smell sweet and tart.",
             _ => "A useful item.",
         }
     }
@@ -265,6 +290,10 @@ impl Item {
             Item::Paper => 0.05,
             Item::BlankBook => 0.3,
             Item::Book | Item::TutorialBook | Item::DeathNote | Item::OldBook => 0.4,
+            Item::Fish => 1.0,
+            Item::MuddyWater | Item::CleanWater => 0.6,
+            Item::CookedFish => 0.4,
+            Item::CookedBerries => 0.2,
             _ => 0.1,
         }
     }
