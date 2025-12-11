@@ -259,6 +259,8 @@ pub struct Player {
     pub room: Option<Room>,
     #[serde(default = "Player::default_visited")]
     pub visited: HashSet<Position>,
+    #[serde(default = "Player::default_known_blueprints")]
+    pub known_blueprints: HashSet<Item>,
 
     // Stats
     pub health: f32, // 0-100
@@ -294,6 +296,7 @@ impl Player {
             facing: Direction::North,
             room: None,
             visited,
+            known_blueprints: HashSet::new(),
 
             health: 100.0,
             warmth: 50.0,
@@ -311,6 +314,10 @@ impl Player {
     }
 
     pub fn default_visited() -> HashSet<Position> {
+        HashSet::new()
+    }
+
+    pub fn default_known_blueprints() -> HashSet<Item> {
         HashSet::new()
     }
 

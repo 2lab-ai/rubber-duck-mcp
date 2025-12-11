@@ -1,0 +1,26 @@
+{
+  "task_id": 13,
+  "scope": "Knowledge: Blueprint discovery/learning separation",
+  "goal": "Track blueprint knowledge separately from the full recipe list so players only see and craft what they've learned, and unlock new blueprints via progression triggers (skills, reading, interactions).",
+  "decisions": [
+    "Store known blueprints in player state as item IDs; recipes remain centralized and unchanged.",
+    "Seed starting knowledge from early-game skills (survival/fire-making/tailoring) so core recipes remain available; gate advanced recipes (e.g., stone axe) behind progression.",
+    "Trigger unlocks on skill thresholds and reading specific books/pages to satisfy the \"skills + book completion\" requirement; surface clear hints when attempting unknown recipes."
+  ],
+  "plan": [
+    "Add persistence for known_blueprints with defaults and helpers (is_known, unlock, list_known); seed initial knowledge during load/new via skill-based rules.",
+    "Implement unlock triggers: refresh check on load/tick, and explicit hooks after reading books or hitting skill milestones; add a tutorial book page unlock path for at least one recipe.",
+    "Gate create/examine flows to only allow known blueprints; when unknown, show hint text and omit recipe details; surface a short \"known blueprints\" summary for guidance.",
+    "Verify interactions and messaging (create/use/examine), ensure serialization compatibility, and update todo tracking."
+  ],
+  "notes": [
+    "Keep existing recipe table untouched; changes live in state/logic layers.",
+    "Aim for concise hints rather than full spoilers when a blueprint is locked."
+  ],
+  "status": "completed",
+  "progress": [
+    "Added player.known_blueprints with serde defaults plus helper queries/hints; seeded knowledge via skill checks and preserved active projects.",
+    "Refresh logic runs on load/tick and after reading; stone axe unlocks via woodcutting >=12 or finishing the Cabin Tutorial.",
+    "create/examine now honor known-only blueprints, return hint text when locked, and show known/locked summaries; todo entries updated."
+  ]
+}

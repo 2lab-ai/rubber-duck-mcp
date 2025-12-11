@@ -154,6 +154,49 @@ impl GameState {
         self.player.mark_visited();
     }
 
+    pub fn refresh_blueprint_knowledge(&mut self, push_messages: bool) {
+        let tutorial_done = self.book_completed(TUTORIAL_BOOK_ID);
+        let active_target = self.player.active_project.as_ref().map(|bp| bp.target_item);
+
+        let add_if = |state: &mut Self, item: Item, condition: bool, reason: &str| {
+            if !(condition || active_target == Some(item)) {
+                return;
+            }
+            if state.player.known_blueprints.insert(item) && push_messages {
+                state.pending_messages.push(format!(
+                    "You learned the {} blueprint. {}",
+                    item.name(),
+                    reason
+                ));
+            }
+        };
+
+        add_if(
+            self,
+            Item::StoneKnife,
+            self.player.skills.survival >= 8,
+            "Basic survival practice reveals how to knap and lash a knife.",
+        );
+        add_if(
+            self,
+            Item::Cordage,
+            self.player.skills.tailoring >= 8,
+            "You recognize how to twist plant fibers into rope.",
+        );
+        add_if(
+            self,
+            Item::Campfire,
+            self.player.skills.fire_making >= 8 || self.player.skills.survival >= 8,
+            "Fire-making fundamentals click into place.",
+        );
+        add_if(
+            self,
+            Item::StoneAxe,
+            self.player.skills.woodcutting >= 12 || tutorial_done,
+            "Woodcutting skill or completing the cabin tutorial reveals axe joinery.",
+        );
+    }
+
     fn ensure_book_registry(&mut self) {
         let mut insert_if_missing = |id: &str, title: &str, pages: Vec<&str>, writable: bool| {
             if !self.books.contains_key(id) {
@@ -343,6 +386,61 @@ impl GameState {
         self.player.book_progress.insert(id.to_string(), page);
     }
 
+    fn book_completed(&self, id: &str) -> bool {
+        let read_page = self.book_page(id);
+        let total_pages = self.books.get(id).map(|b| b.pages.len()).unwrap_or(0);
+        total_pages > 0 && read_page >= total_pages
+    }
+
+    pub fn knows_blueprint(&self, item: Item) -> bool {
+        self.player.known_blueprints.contains(&item)
+    }
+
+    pub fn known_blueprint_names(&self) -> Vec<String> {
+        let mut names: Vec<String> = self
+            .player
+            .known_blueprints
+            .iter()
+            .map(|i| i.name().to_string())
+            .collect();
+        names.sort();
+        names
+    }
+
+    pub fn blueprint_hint_text(&self, item: Item) -> Option<&'static str> {
+        self.blueprint_hint(item)
+    }
+
+    fn blueprint_hint(&self, item: Item) -> Option<&'static str> {
+        match item {
+            Item::StoneAxe => {
+                Some("Raise woodcutting to 12 or finish the Cabin Tutorial to learn it.")
+            }
+            Item::StoneKnife => Some("Build basic survival skill to unlock this."),
+            Item::Campfire => Some("Practice fire-making to level 8+ to learn this pattern."),
+            Item::Cordage => Some("Tailoring 8+ reveals how to twist cordage."),
+            _ => None,
+        }
+    }
+
+    pub fn locked_blueprint_hints(&self) -> Vec<String> {
+        let targets = [
+            Item::StoneKnife,
+            Item::Campfire,
+            Item::Cordage,
+            Item::StoneAxe,
+        ];
+        let mut hints = Vec::new();
+        for item in targets {
+            if !self.knows_blueprint(item) {
+                if let Some(hint) = self.blueprint_hint(item) {
+                    hints.push(format!("{}: {}", item.name(), hint));
+                }
+            }
+        }
+        hints
+    }
+
     pub fn on_player_pickup(&mut self, item: &Item) {
         if matches!(
             item,
@@ -483,6 +581,7 @@ impl GameState {
         state.bootstrap_structures();
         state.ensure_cabin_books();
         state.ensure_player_visit();
+        state.refresh_blueprint_knowledge(false);
         state.seed_bamboo_grove();
         state.seed_tree_population(map, &mut rng, 10);
         state
@@ -525,6 +624,7 @@ impl GameState {
                     state.bootstrap_structures();
                     state.ensure_cabin_books();
                     state.ensure_player_visit();
+                    state.refresh_blueprint_knowledge(false);
                     state.seed_bamboo_grove();
 
                     let mut rng = rand::thread_rng();
@@ -590,6 +690,9 @@ impl GameState {
 
         // Update player warmth based on environment
         self.update_player_comfort(map);
+
+        // Check for newly unlocked blueprints as skills/books progress
+        self.refresh_blueprint_knowledge(true);
     }
 
     fn update_player_comfort(&mut self, map: &WorldMap) {

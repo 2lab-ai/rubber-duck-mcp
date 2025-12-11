@@ -422,8 +422,24 @@ pub fn examine(target: &str, state: &GameState) -> String {
         if let Some(bp) = &player.active_project {
             return bp.status_description();
         } else {
-            return "You don't have any active blueprint. Use 'create [item]' to start one."
-                .to_string();
+            let mut parts = Vec::new();
+            let known = state.known_blueprint_names();
+            if !known.is_empty() {
+                parts.push(format!("Known blueprints: {}", known.join(", ")));
+            }
+            let locked = state.locked_blueprint_hints();
+            if !locked.is_empty() {
+                parts.push(format!("Locked: {}", locked.join(" | ")));
+            }
+            let tail = if parts.is_empty() {
+                String::new()
+            } else {
+                format!(" {}", parts.join(" "))
+            };
+            return format!(
+                "You don't have any active blueprint. Use 'create [item]' to start one.{}",
+                tail
+            );
         }
     }
 
@@ -790,6 +806,7 @@ fn handle_book_use(state: &mut GameState, item: &Item, target: Option<&str>) -> 
         page = max_page;
     }
     state.set_book_page(&book_id, page);
+    state.refresh_blueprint_knowledge(true);
 
     let message = if page == 0 {
         format!(
@@ -1044,19 +1061,39 @@ pub fn try_create(item_name: &str, state: &mut GameState) -> InteractionResult {
         None => return InteractionResult::Failure(format!("Unknown item '{}'.", item_name)),
     };
 
-    if let Some(bp) = Blueprint::new(target_item) {
-        let progress = bp.progress_summary();
-        let time_cost = bp.time_cost;
-        state.player.active_project = Some(bp);
-        InteractionResult::Success(format!(
-            "You lay out plans for a {}. Requires: {}. Total build time: {} mins.",
-            target_item.name(),
-            progress,
-            time_cost
-        ))
-    } else {
-        InteractionResult::Failure(format!("You don't know how to craft a {}.", item_name))
+    let recipe_available = Blueprint::new(target_item).is_some();
+    if !recipe_available {
+        return InteractionResult::Failure(format!("You don't know how to craft a {}.", item_name));
     }
+
+    state.refresh_blueprint_knowledge(true);
+
+    if !state.knows_blueprint(target_item) {
+        let mut msg = format!(
+            "You haven't learned the {} blueprint yet.",
+            target_item.name()
+        );
+        if let Some(hint) = state.blueprint_hint_text(target_item) {
+            msg.push(' ');
+            msg.push_str(hint);
+        }
+        let known = state.known_blueprint_names();
+        if !known.is_empty() {
+            msg.push_str(&format!(" Known blueprints: {}.", known.join(", ")));
+        }
+        return InteractionResult::Failure(msg);
+    }
+
+    let bp = Blueprint::new(target_item).unwrap();
+    let progress = bp.progress_summary();
+    let time_cost = bp.time_cost;
+    state.player.active_project = Some(bp);
+    InteractionResult::Success(format!(
+        "You lay out plans for a {}. Requires: {}. Total build time: {} mins.",
+        target_item.name(),
+        progress,
+        time_cost
+    ))
 }
 
 pub fn write_on_book(text: &str, target: &str, state: &mut GameState) -> InteractionResult {
