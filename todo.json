@@ -3,10 +3,121 @@
   "version": "2.1.0",
   "tasks": [
     {
+      "id": 7,
+      "category": "World & Systems",
+      "title": "11x11 Biome Map, Weather, Temperature",
+      "description": [
+        "좌표 원점을 캐빈 중심(0,0)으로 이동: 스타트는 (0,5), 나무 베는 곳은 (-1,0), 캐빈은 테라스/실내/입구를 포함한 2x2에 가까운 크기로 취급.",
+        "맵을 -50..50 범위로 확장하고 기존 11x11을 중앙에 배치, 외곽은 impassable 지형으로 막기; http 지도는 중심을 (0,0)로 두고 미방문 구역은 fog-of-war로 숨김.",
+        "GDD 좌표에 맞춰 11x11 맵을 재구성: 서쪽 사막/오아시스, 중앙 호수(1-5행 1-9열), 북쪽 봄/가을 숲+원격 설산, 동쪽 겨울 설원, 남쪽 스타트(10,5)와 캐빈(6,5) 반영.",
+        "바이옴별 날씨 테이블(사막: clear/heat_wave/sandstorm, 북쪽: clear/cloudy/light_rain/fog, 동쪽: clear/light_snow/blizzard)과 시각대별 온도 변화를 구현해 시야/설명/체온에 영향 주기.",
+        "실내/실외 온도 보정과 벽난로 열기 반영해서 플레이어 warmth/comfort가 변하도록 시간 경과에 연결."
+      ],
+      "priority": "High",
+      "status": "todo"
+    },
+    {
+      "id": 13,
+      "category": "Knowledge",
+      "title": "블루프린트 발견/학습 분리",
+      "description": [
+        "블루프린트 전체 목록과 플레이어가 알고 있는 목록을 분리 저장; create/examine 시 알지 못한 설계는 노출하지 않고 조건 충족 시 unlock.",
+        "스킬 레벨, 책 읽기 완료, 특정 오브젝트 상호작용 등 조건으로 학습 처리하고 퍼시스턴스에 반영.",
+        "알고 있는 설계만 자동 추천/탐색 목록에 표시하고 미알려진 설계는 힌트 메시지로만 전달."
+      ],
+      "priority": "High",
+      "status": "todo"
+    },
+    {
+      "id": 8,
+      "category": "Simulation",
+      "title": "Wildlife Behaviors & Observation",
+      "description": [
+        "바이옴별 야생동물 스폰 테이블 정의(사막 도마뱀/여우, 북쪽 사슴/토끼/새, 동쪽 북극여우/올빼미/순록)와 활동 주기(주행성/야행성/박명성)에 따라 이동/행동 상태 업데이트.",
+        "오두막 테라스에서 방향별 관찰 메시지 지원, observation 스킬 레벨에 비례해 세부 묘사/거리 판정 추가.",
+        "야생동물 행동이 시간/날씨에 반응하도록 시뮬레이션 틱과 연계 (눈/비/폭풍 시 은신, 맑을 때 활동 증가)."
+      ],
+      "priority": "Medium",
+      "status": "todo"
+    },
+    {
+      "id": 10,
+      "category": "Realism",
+      "title": "내구도 & 자원 고갈/재생",
+      "description": [
+        "도구마다 durability를 두고 use 시 소모되며 0이 되면 파손 혹은 Broken 아이템으로 전환; 파손 시 메시지/성능 저하 처리.",
+        "타일 자원(나무, 덤불, 돌)별 채집 가능한 횟수와 리스폰 타이머를 두어 채집량을 관리, 고갈 시 대체 설명 제공.",
+        "블루프린트/가공 액션이 내구도와 자원 상태를 확인하고 실패/성공 시 에너지/시간 소모 차등 적용."
+      ],
+      "priority": "Medium",
+      "status": "todo"
+    },
+    {
+      "id": 11,
+      "category": "Survival Loop",
+      "title": "물/음식 조리 및 정수",
+      "description": [
+        "호수/오아시스에서 muddy_water를 채집하고 campfire 위에서 boil해 clean_water로 변환, 끓일 때 연료/시간 소모 및 실패 메시지 처리.",
+        "간단한 요리 흐름 추가: use fish/berries on fire/pan으로 grilled/boiled 아이템을 만들고 에너지/무드/온기 회복량을 정의.",
+        "weather/time-of-day에 따라 불 사용 난이도/연료 요구량을 조정해 겨울에는 더 많은 장작, 폭풍에는 점화 실패 확률 상승."
+      ],
+      "priority": "Medium",
+      "status": "todo"
+    },
+    {
+      "id": 14,
+      "category": "Content",
+      "title": "낚시 입문서와 블루프린트 해금",
+      "description": [
+        "캐빈 내부에 'Book of Fishing' 배치, 페이지 단위 읽기 진행도를 추적.",
+        "책의 모든 페이지를 읽으면 'wooden fishing rod' 블루프린트를 플레이어 지식 목록에 추가.",
+        "책을 읽지 않은 상태에서는 관련 블루프린트를 숨기고, 책 읽기 중에는 다음 페이지 힌트를 제공."
+      ],
+      "priority": "Medium",
+      "status": "todo"
+    },
+    {
+      "id": 12,
+      "category": "Exploration",
+      "title": "낚시 & 호수 활동",
+      "description": [
+        "호수/오아시스 타일에서 fishing 행동 추가: 기본은 빈손 낚시(성공률 낮음), stone/wooden rod 블루프린트로 성공률/루트 차등화.",
+        "낚시 결과 테이블(작은 물고기/큰 물고기/쓰레기/아무것도 없음)과 시간대/날씨/스킬에 따른 가중치 정의.",
+        "보트/부유물 제작 블루프린트(단계적 재료 요구)로 호수 중앙이나 북쪽 설산 반사 지점 탐색을 열고, 위험/보상 설명 추가."
+      ],
+      "priority": "Low",
+      "status": "todo"
+    },
+    {
+      "id": 15,
+      "category": "Exploration",
+      "title": "동쪽 동굴 입구",
+      "description": [
+        "동쪽 설원 가장자리에 cave entrance 타일 추가, enter 가능하게 하고 내부는 어두워 더 깊이 못 들어간다는 메시지 제공.",
+        "초기에는 초입 한 칸까지만 탐사 가능하며 조명/장비가 없으면 진행 불가로 처리.",
+        "지도/시야 시스템에 동굴 입구를 표시하고, 내부는 방문 전까지 fog 처리."
+      ],
+      "priority": "Low",
+      "status": "todo"
+    },
+    {
+      "id": 16,
+      "category": "Interaction",
+      "title": "카드 케이스 & 흩뿌리기",
+      "description": [
+        "카드 케이스 아이템에 52장 카드가 들어있는 상태로 스폰; use로 open/close 가능.",
+        "open 후 use 카드케이스로 전체 카드를 한 번에 꺼내거나 다시 넣기; 케이스를 던지면 52장이 현재 타일 주변에 랜덤 드롭되어 케이스/카드가 바닥에 쌓임.",
+        "바닥의 카드들을 하나씩 주워 케이스에 다시 최대 52장까지 넣을 수 있게 처리.",
+        "카드 흩뿌리기 이벤트를 최초로 하면 업적 해금(유머 메시지 포함)."
+      ],
+      "priority": "Low",
+      "status": "todo"
+    },
+    {
       "id": 0,
       "category": "System Core: Tile & Object",
       "title": "지도와 물체",
-      "description": [ 
+      "description": [
         "모든 타일에는 오브젝트가 올라가 있을수 있음. 기존에 캐빈이랑 wood shed처럼 특수 처리가 아니라 타일에 오브젝트들로 구현해야함. 그리고 일부 큰 오브젝트들 (책상, 벽)등은 다른 물체를 올리거나 붙일 수 있음.",
         "시야: 대부분의 물체는 바로 한칸 건너에서 볼수 있음. 큰 물체는 두칸 혹은 더 멀리서도 볼 수 있음. 나무는 3칸 건너서 볼 수 있음. 캐빈은 5칸 멀리서도 볼수 있음. 캐빈도 오브젝트임. 모든 건 타일과 오브젝트로 이루어져 있음."
       ],
@@ -88,129 +199,6 @@
         "Knife on bamboo crafts paper; using 5 paper binds a blank book; writing a title on a blank book creates a book with a unique ID.",
         "Book registry seeded with tutorial/old/death note; book ownership tracking; write command for titles/pages; reading via use + next/prev page navigation shows cover/page counts."
       ]
-    },
-    {
-      "id": 7,
-      "category": "World & Systems",
-      "title": "11x11 Biome Map, Weather, Temperature",
-      "description": [
-        "좌표 원점을 캐빈 중심(0,0)으로 이동: 스타트는 (0,5), 나무 베는 곳은 (-1,0), 캐빈은 테라스/실내/입구를 포함한 2x2에 가까운 크기로 취급.",
-        "맵을 -50..50 범위로 확장하고 기존 11x11을 중앙에 배치, 외곽은 impassable 지형으로 막기; http 지도는 중심을 (0,0)로 두고 미방문 구역은 fog-of-war로 숨김.",
-        "GDD 좌표에 맞춰 11x11 맵을 재구성: 서쪽 사막/오아시스, 중앙 호수(1-5행 1-9열), 북쪽 봄/가을 숲+원격 설산, 동쪽 겨울 설원, 남쪽 스타트(10,5)와 캐빈(6,5) 반영.",
-        "바이옴별 날씨 테이블(사막: clear/heat_wave/sandstorm, 북쪽: clear/cloudy/light_rain/fog, 동쪽: clear/light_snow/blizzard)과 시각대별 온도 변화를 구현해 시야/설명/체온에 영향 주기.",
-        "실내/실외 온도 보정과 벽난로 열기 반영해서 플레이어 warmth/comfort가 변하도록 시간 경과에 연결."
-      ],
-      "priority": "High",
-      "status": "todo"
-    },
-    {
-      "id": 8,
-      "category": "Simulation",
-      "title": "Wildlife Behaviors & Observation",
-      "description": [
-        "바이옴별 야생동물 스폰 테이블 정의(사막 도마뱀/여우, 북쪽 사슴/토끼/새, 동쪽 북극여우/올빼미/순록)와 활동 주기(주행성/야행성/박명성)에 따라 이동/행동 상태 업데이트.",
-        "오두막 테라스에서 방향별 관찰 메시지 지원, observation 스킬 레벨에 비례해 세부 묘사/거리 판정 추가.",
-        "야생동물 행동이 시간/날씨에 반응하도록 시뮬레이션 틱과 연계 (눈/비/폭풍 시 은신, 맑을 때 활동 증가)."
-      ],
-      "priority": "Medium",
-      "status": "todo"
-    },
-    {
-      "id": 9,
-      "category": "Cabin & Fire",
-      "title": "실내 구역, 문/난로 상태, 연료 루프",
-      "description": [
-        "캐빈 내부 구역(메인룸/테라스)과 출입문 열림/닫힘 상태를 퍼시스턴트하게 저장하고, open/close/enter/exit 명령으로 이동 가능하게 만들기.",
-        "벽난로 상태머신(cold/smoldering/burning/roaring)과 연료 소모량, 온도 상승치, 가시 연기/빛 설명을 정의하고 matchbox/kindling/firewood 아이템 루프와 연결.",
-        "우드쉐드 기본 아이템(도끼, 통나무 스택, 장작 수) 초기화와 chopping_block 상호작용을 온도/에너지 소모와 함께 시뮬레이트."
-      ],
-      "priority": "High",
-      "status": "todo"
-    },
-    {
-      "id": 10,
-      "category": "Realism",
-      "title": "내구도 & 자원 고갈/재생",
-      "description": [
-        "도구마다 durability를 두고 use 시 소모되며 0이 되면 파손 혹은 Broken 아이템으로 전환; 파손 시 메시지/성능 저하 처리.",
-        "타일 자원(나무, 덤불, 돌)별 채집 가능한 횟수와 리스폰 타이머를 두어 채집량을 관리, 고갈 시 대체 설명 제공.",
-        "블루프린트/가공 액션이 내구도와 자원 상태를 확인하고 실패/성공 시 에너지/시간 소모 차등 적용."
-      ],
-      "priority": "Medium",
-      "status": "todo"
-    },
-    {
-      "id": 11,
-      "category": "Survival Loop",
-      "title": "물/음식 조리 및 정수",
-      "description": [
-        "호수/오아시스에서 muddy_water를 채집하고 campfire 위에서 boil해 clean_water로 변환, 끓일 때 연료/시간 소모 및 실패 메시지 처리.",
-        "간단한 요리 흐름 추가: use fish/berries on fire/pan으로 grilled/boiled 아이템을 만들고 에너지/무드/온기 회복량을 정의.",
-        "weather/time-of-day에 따라 불 사용 난이도/연료 요구량을 조정해 겨울에는 더 많은 장작, 폭풍에는 점화 실패 확률 상승."
-      ],
-      "priority": "Medium",
-      "status": "todo"
-    },
-    {
-      "id": 12,
-      "category": "Exploration",
-      "title": "낚시 & 호수 활동",
-      "description": [
-        "호수/오아시스 타일에서 fishing 행동 추가: 기본은 빈손 낚시(성공률 낮음), stone/wooden rod 블루프린트로 성공률/루트 차등화.",
-        "낚시 결과 테이블(작은 물고기/큰 물고기/쓰레기/아무것도 없음)과 시간대/날씨/스킬에 따른 가중치 정의.",
-        "보트/부유물 제작 블루프린트(단계적 재료 요구)로 호수 중앙이나 북쪽 설산 반사 지점 탐색을 열고, 위험/보상 설명 추가."
-      ],
-      "priority": "Low",
-      "status": "todo"
-    },
-    {
-      "id": 13,
-      "category": "Knowledge",
-      "title": "블루프린트 발견/학습 분리",
-      "description": [
-        "블루프린트 전체 목록과 플레이어가 알고 있는 목록을 분리 저장; create/examine 시 알지 못한 설계는 노출하지 않고 조건 충족 시 unlock.",
-        "스킬 레벨, 책 읽기 완료, 특정 오브젝트 상호작용 등 조건으로 학습 처리하고 퍼시스턴스에 반영.",
-        "알고 있는 설계만 자동 추천/탐색 목록에 표시하고 미알려진 설계는 힌트 메시지로만 전달."
-      ],
-      "priority": "High",
-      "status": "todo"
-    },
-    {
-      "id": 14,
-      "category": "Content",
-      "title": "낚시 입문서와 블루프린트 해금",
-      "description": [
-        "캐빈 내부에 'Book of Fishing' 배치, 페이지 단위 읽기 진행도를 추적.",
-        "책의 모든 페이지를 읽으면 'wooden fishing rod' 블루프린트를 플레이어 지식 목록에 추가.",
-        "책을 읽지 않은 상태에서는 관련 블루프린트를 숨기고, 책 읽기 중에는 다음 페이지 힌트를 제공."
-      ],
-      "priority": "Medium",
-      "status": "todo"
-    },
-    {
-      "id": 15,
-      "category": "Exploration",
-      "title": "동쪽 동굴 입구",
-      "description": [
-        "동쪽 설원 가장자리에 cave entrance 타일 추가, enter 가능하게 하고 내부는 어두워 더 깊이 못 들어간다는 메시지 제공.",
-        "초기에는 초입 한 칸까지만 탐사 가능하며 조명/장비가 없으면 진행 불가로 처리.",
-        "지도/시야 시스템에 동굴 입구를 표시하고, 내부는 방문 전까지 fog 처리."
-      ],
-      "priority": "Low",
-      "status": "todo"
-    },
-    {
-      "id": 16,
-      "category": "Interaction",
-      "title": "카드 케이스 & 흩뿌리기",
-      "description": [
-        "카드 케이스 아이템에 52장 카드가 들어있는 상태로 스폰; use로 open/close 가능.",
-        "open 후 use 카드케이스로 전체 카드를 한 번에 꺼내거나 다시 넣기; 케이스를 던지면 52장이 현재 타일 주변에 랜덤 드롭되어 케이스/카드가 바닥에 쌓임.",
-        "바닥의 카드들을 하나씩 주워 케이스에 다시 최대 52장까지 넣을 수 있게 처리.",
-        "카드 흩뿌리기 이벤트를 최초로 하면 업적 해금(유머 메시지 포함)."
-      ],
-      "priority": "Low",
-      "status": "todo"
     }
   ]
 }

@@ -26,17 +26,34 @@ PY
 )
 
 REQUESTED_VERSION="${1:-}"
-if [[ -n "$REQUESTED_VERSION" ]]; then
-  NEW_VERSION="$REQUESTED_VERSION"
-else
-  IFS=. read -r MAJ MIN PATCH <<<"$CURRENT_VERSION"
-  PATCH=$((PATCH + 1))
-  NEW_VERSION="$MAJ.$MIN.$PATCH"
+LAST_COMMIT_SUMMARY=$(git log -1 --pretty=%B | head -n1)
+LAST_RELEASE_VERSION=""
+if [[ "$LAST_COMMIT_SUMMARY" =~ ^Release[[:space:]]v([0-9]+\.[0-9]+\.[0-9]+)$ ]]; then
+  LAST_RELEASE_VERSION="${BASH_REMATCH[1]}"
 fi
 
-if git tag -l "v$NEW_VERSION" >/dev/null 2>&1 && git tag -l "v$NEW_VERSION" | grep -q .; then
-  echo "Tag v$NEW_VERSION already exists" >&2
-  exit 1
+REUSE_EXISTING_RELEASE=0
+NEW_VERSION=""
+
+if [[ -z "$REQUESTED_VERSION" && -n "$LAST_RELEASE_VERSION" && "$LAST_RELEASE_VERSION" == "$CURRENT_VERSION" ]]; then
+  REUSE_EXISTING_RELEASE=1
+  NEW_VERSION="$CURRENT_VERSION"
+  echo "Latest commit already bumped to v$NEW_VERSION; retrying publish without changing version."
+fi
+
+if [[ $REUSE_EXISTING_RELEASE -eq 0 ]]; then
+  if [[ -n "$REQUESTED_VERSION" ]]; then
+    NEW_VERSION="$REQUESTED_VERSION"
+  else
+    IFS=. read -r MAJ MIN PATCH <<<"$CURRENT_VERSION"
+    PATCH=$((PATCH + 1))
+    NEW_VERSION="$MAJ.$MIN.$PATCH"
+  fi
+
+  if git tag -l "v$NEW_VERSION" >/dev/null 2>&1 && git tag -l "v$NEW_VERSION" | grep -q .; then
+    echo "Tag v$NEW_VERSION already exists" >&2
+    exit 1
+  fi
 fi
 
 python - <<PY
@@ -74,9 +91,15 @@ PY
 
 echo "Version: $CURRENT_VERSION -> $NEW_VERSION"
 
-git add Cargo.toml Cargo.lock npm/package.json
-git commit -m "Release v$NEW_VERSION"
-git tag "v$NEW_VERSION"
+if [[ $REUSE_EXISTING_RELEASE -eq 0 ]]; then
+  git add Cargo.toml Cargo.lock npm/package.json
+  git commit -m "Release v$NEW_VERSION"
+  git tag "v$NEW_VERSION"
+else
+  if ! git tag -l "v$NEW_VERSION" | grep -q .; then
+    git tag "v$NEW_VERSION"
+  fi
+fi
 
 git push
 git push origin "v$NEW_VERSION"
@@ -87,7 +110,21 @@ if [[ -n "${NPM_OTP:-}" ]]; then
 fi
 
 pushd npm >/dev/null
-npm publish --access public $OTP_ARG
+PUBLISH_LOG=$(mktemp)
+if npm publish --access public $OTP_ARG >"$PUBLISH_LOG" 2>&1; then
+  cat "$PUBLISH_LOG"
+else
+  if grep -qi "Please try logging in again" "$PUBLISH_LOG"; then
+    echo "npm auth expired or revoked. Running npm login then retrying publish..."
+    cat "$PUBLISH_LOG"
+    npm login
+    npm publish --access public $OTP_ARG
+  else
+    cat "$PUBLISH_LOG" >&2
+    exit 1
+  fi
+fi
+rm -f "$PUBLISH_LOG"
 popd >/dev/null
 
 echo "Release pipeline kicked off for v$NEW_VERSION"
