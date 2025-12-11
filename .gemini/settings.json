@@ -1,8 +1,10 @@
 {
   "mcpServers": {
     "rubber-duck": {
-      "command": "/Users/icedac/2lab.ai/cco4-persona/p9/rubber-duck-mcp/target/release/rubber-duck-mcp",
-      "args": []
+      "command": "npx",
+      "args": [
+        "@2lab.ai/rubber-duck-mcp"
+      ]
     }
   }
 }
