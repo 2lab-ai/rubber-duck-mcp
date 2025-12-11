@@ -27,7 +27,7 @@ if (!target) {
 }
 
 const isWindows = os.platform() === "win32";
-const archiveExt = isWindows ? "zip" : "tar.gz";
+const archiveExt = isWindows ? "zip" : "tar.xz";
 const archiveName = `${binName}-${target}.${archiveExt}`;
 const downloadUrl = `https://github.com/${repo}/releases/download/v${version}/${archiveName}`;
 
@@ -50,7 +50,7 @@ try {
     run(`powershell -Command "Expand-Archive -Path  -DestinationPath  -Force"`);
   } else {
     run(`curl -fL ${downloadUrl} -o "${archivePath}"`);
-    run(`tar -xzf "${archivePath}" -C "${nativeDir}"`);
+    run(`tar -xJf "${archivePath}" -C "${nativeDir}"`);
   }
 
   const binPath = path.join(nativeDir, binName + (isWindows ? ".exe" : ""));

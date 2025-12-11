@@ -4,6 +4,7 @@ version = "0.1.0"
 edition = "2021"
 description = "A text-based healing MUD nature simulation as an MCP server"
 authors = ["2lab.ai"]
+repository = "https://github.com/2lab-ai/rubber-duck-mcp"
 
 [dependencies]
 # Serialization
@@ -39,6 +40,8 @@ inherits = "release"
 lto = true
 
 [workspace.metadata.dist]
+cargo-dist-version = "0.30.2"
+allow-dirty = ["ci"]
 ci = "github"
 installers = ["shell"]
 targets = [
