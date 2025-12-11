@@ -1,6 +1,6 @@
 [package]
 name = "rubber-duck-mcp"
-version = "0.1.5"
+version = "0.1.6"
 edition = "2021"
 description = "A text-based healing MUD nature simulation as an MCP server"
 authors = ["2lab.ai"]
