@@ -83,7 +83,7 @@ You generally don’t need to run this manually. If you do run `npx @2lab.ai/rub
 
 But typical usage is to **let your AI run it via MCP**. Just add it with the MCP command above and tell the AI: “Use the `rubber-duck` MCP server freely.” No need to start it yourself.
 
-If a fresh release was just cut and npm hasn’t caught up yet, use `scripts/npx-wait.sh` to poll the registry (10s interval, 10m timeout) and then run the new version automatically:
+If a fresh release was just cut, use `scripts/npx-wait.sh` to poll both npm (for the version) and GitHub (for the release asset) every 10s (timeout 10m), then run the new version automatically:
 
 ```bash
 scripts/npx-wait.sh        # uses version from npm/package.json
