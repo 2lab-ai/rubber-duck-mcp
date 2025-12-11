@@ -393,7 +393,7 @@ impl McpServer {
             None => return CallToolResult::error("Please specify an item to drop.".to_string()),
         };
 
-        let result = try_drop(&item, &mut self.world.state);
+        let result = try_drop(&item, &mut self.world.state, &mut self.world.map);
 
         let text = match result {
             InteractionResult::Success(msg) => msg,

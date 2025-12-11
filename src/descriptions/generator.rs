@@ -186,6 +186,28 @@ impl DescriptionGenerator {
             description.push_str(&format!("Here you notice: {}.", names.join(", ")));
         }
 
+        // Items on the ground at this tile
+        if let Some(tile) = map.get_tile(row, col) {
+            let mut ground: Vec<String> = tile
+                .items
+                .items
+                .iter()
+                .filter(|(_, qty)| *qty > 0)
+                .map(|(item, qty)| {
+                    if *qty > 1 {
+                        format!("{} x{}", item.name(), qty)
+                    } else {
+                        item.name().to_string()
+                    }
+                })
+                .collect();
+            if !ground.is_empty() {
+                ground.sort();
+                description.push_str("\n\n");
+                description.push_str(&format!("On the ground: {}.", ground.join(", ")));
+            }
+        }
+
         let mut visible_objects = Vec::new();
         for po in objects.visible_from(&player.position) {
             if po.position == player.position {

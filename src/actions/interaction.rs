@@ -377,7 +377,7 @@ pub fn try_take(item_name: &str, state: &mut GameState, map: &mut WorldMap) -> I
     ))
 }
 
-pub fn try_drop(item_name: &str, state: &mut GameState) -> InteractionResult {
+pub fn try_drop(item_name: &str, state: &mut GameState, map: &mut WorldMap) -> InteractionResult {
     let item = match Item::from_str(item_name) {
         Some(i) => i,
         None => {
@@ -408,7 +408,25 @@ pub fn try_drop(item_name: &str, state: &mut GameState) -> InteractionResult {
                 }
             }
         }
-        _ => {} // Outside, items just... go away for now
+        None => {
+            if let Some((r, c)) = state.player.position.as_usize() {
+                if let Some(tile) = map.get_tile_mut(r, c) {
+                    tile.items.add(item.clone(), 1);
+                } else {
+                    // Failed to place, return item
+                    state.player.inventory.add(item.clone(), 1);
+                    return InteractionResult::Failure(
+                        "You fumble and fail to set that down here.".to_string(),
+                    );
+                }
+            } else {
+                state.player.inventory.add(item.clone(), 1);
+                return InteractionResult::Failure(
+                    "You fumble and fail to set that down here.".to_string(),
+                );
+            }
+        }
+        _ => {}
     }
     InteractionResult::ItemLost(item.clone(), format!("You set down the {}.", item.name()))
 }
