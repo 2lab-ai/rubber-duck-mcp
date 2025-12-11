@@ -1,6 +1,6 @@
-use std::collections::HashMap;
-use serde::{Deserialize, Serialize};
 use crate::entity::Item;
+use serde::{Deserialize, Serialize};
+use std::collections::HashMap;
 
 #[derive(Clone, Copy)]
 struct BlueprintRecipe {
@@ -21,27 +21,17 @@ const BLUEPRINT_RECIPES: &[BlueprintRecipe] = &[
     },
     BlueprintRecipe {
         target_item: Item::StoneAxe,
-        required: &[
-            (Item::SharpStone, 1),
-            (Item::Stick, 1),
-            (Item::Cordage, 1),
-        ],
+        required: &[(Item::SharpStone, 1), (Item::Stick, 1), (Item::Cordage, 1)],
         time_cost: 40,
     },
     BlueprintRecipe {
         target_item: Item::Campfire,
-        required: &[
-            (Item::Stone, 4),
-            (Item::Kindling, 1),
-            (Item::Log, 2),
-        ],
+        required: &[(Item::Stone, 4), (Item::Kindling, 1), (Item::Log, 2)],
         time_cost: 20,
     },
     BlueprintRecipe {
         target_item: Item::Cordage,
-        required: &[
-            (Item::PlantFiber, 3),
-        ],
+        required: &[(Item::PlantFiber, 3)],
         time_cost: 10,
     },
 ];
@@ -104,7 +94,9 @@ impl Blueprint {
     }
 
     pub fn progress_entries(&self) -> Vec<(Item, u32, u32)> {
-        let mut entries: Vec<(Item, u32, u32)> = self.required.iter()
+        let mut entries: Vec<(Item, u32, u32)> = self
+            .required
+            .iter()
             .map(|(item, req)| (*item, *self.current.get(item).unwrap_or(&0), *req))
             .collect();
         entries.sort_by_key(|(item, _, _)| item.name());
@@ -112,13 +104,14 @@ impl Blueprint {
     }
 
     pub fn progress_summary(&self) -> String {
-        let parts: Vec<String> = self.progress_entries()
+        let parts: Vec<String> = self
+            .progress_entries()
             .into_iter()
             .map(|(item, cur, req)| format!("{} {}/{}", item.name(), cur, req))
             .collect();
         parts.join(", ")
     }
-    
+
     pub fn status_description(&self) -> String {
         if self.is_complete() {
             return format!(

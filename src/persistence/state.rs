@@ -1,10 +1,10 @@
+use anyhow::Result;
+use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::path::Path;
-use serde::{Deserialize, Serialize};
-use anyhow::Result;
 
-use crate::world::*;
 use crate::entity::*;
+use crate::world::*;
 use rand::Rng;
 
 const TUTORIAL_BOOK_ID: &str = "book-tutorial";
@@ -51,9 +51,7 @@ impl GameState {
     }
 
     pub fn cabin_state(&self) -> Option<&Cabin> {
-        self.objects
-            .find("cabin")
-            .and_then(|p| p.object.as_cabin())
+        self.objects.find("cabin").and_then(|p| p.object.as_cabin())
     }
 
     pub fn cabin_state_mut(&mut self) -> Option<&mut Cabin> {
@@ -123,7 +121,7 @@ impl GameState {
             surface.supports_mounts = true;
         }
         self.objects
-            .add("cabin_table", Position::new(6, 5), table_obj);
+            .add("cabin_table", Position::new(0, 0), table_obj);
     }
 
     fn ensure_duck_present(&mut self) {
@@ -205,7 +203,9 @@ impl GameState {
     }
 
     fn ensure_cabin_books(&mut self) {
-        let Some(cabin) = self.cabin_state_mut() else { return; };
+        let Some(cabin) = self.cabin_state_mut() else {
+            return;
+        };
         let ensure = |cabin: &mut Cabin, id: &str, item: Item| {
             if !cabin.book_ids.iter().any(|b| b == id) {
                 cabin.book_ids.push(id.to_string());
@@ -272,7 +272,9 @@ impl GameState {
 
     pub fn take_cabin_book_for_item(&mut self, item: &Item) -> Option<String> {
         let id_hint = self.book_id_for_item(item).map(|s| s.to_string());
-        let Some(cabin) = self.cabin_state_mut() else { return None; };
+        let Some(cabin) = self.cabin_state_mut() else {
+            return None;
+        };
         if let Some(id) = id_hint {
             if let Some(pos) = cabin.book_ids.iter().position(|b| b == &id) {
                 return Some(cabin.book_ids.remove(pos));
@@ -338,7 +340,10 @@ impl GameState {
     }
 
     pub fn on_player_pickup(&mut self, item: &Item) {
-        if matches!(item, Item::Book | Item::TutorialBook | Item::OldBook | Item::DeathNote) {
+        if matches!(
+            item,
+            Item::Book | Item::TutorialBook | Item::OldBook | Item::DeathNote
+        ) {
             if let Some(book_id) = self
                 .take_cabin_book_for_item(item)
                 .or_else(|| self.book_id_for_item(item).map(|s| s.to_string()))
@@ -349,7 +354,10 @@ impl GameState {
     }
 
     pub fn on_player_drop(&mut self, item: &Item) -> Option<String> {
-        if matches!(item, Item::Book | Item::TutorialBook | Item::OldBook | Item::DeathNote) {
+        if matches!(
+            item,
+            Item::Book | Item::TutorialBook | Item::OldBook | Item::DeathNote
+        ) {
             // Prefer removing a matching special book id; otherwise pop any
             if let Some(id) = self
                 .book_id_for_item(item)
@@ -372,7 +380,7 @@ impl GameState {
         if self.objects.find("cabin").is_none() {
             self.objects.add(
                 "cabin",
-                Position::new(6, 5),
+                Position::new(0, 0),
                 WorldObject::new(ObjectKind::Cabin(cabin_state)),
             );
         } else if let Some(po) = self.objects.find_mut("cabin") {
@@ -382,21 +390,25 @@ impl GameState {
                     table_items.extend(cabin.table_items.iter().copied());
                 }
             }
+            // Move cabin to new origin
+            if po.position != Position::new(0, 0) {
+                po.position = Position::new(0, 0);
+            }
         }
 
-        let wood_shed_state = self
-            .legacy_wood_shed
-            .take()
-            .unwrap_or_else(WoodShed::new);
+        let wood_shed_state = self.legacy_wood_shed.take().unwrap_or_else(WoodShed::new);
         if self.objects.find("wood_shed").is_none() {
             self.objects.add(
                 "wood_shed",
-                Position::new(5, 4),
+                Position::new(-1, -1),
                 WorldObject::new(ObjectKind::WoodShed(wood_shed_state)),
             );
         } else if let Some(po) = self.objects.find_mut("wood_shed") {
             if po.object.as_wood_shed().is_none() {
                 po.object.kind = ObjectKind::WoodShed(wood_shed_state);
+            }
+            if po.position != Position::new(-1, -1) {
+                po.position = Position::new(-1, -1);
             }
         }
 
@@ -438,11 +450,7 @@ impl GameState {
 
     pub fn table_item_names(&self) -> Vec<String> {
         if let Some(surface) = self.table_surface() {
-            return surface
-                .items
-                .iter()
-                .map(|i| i.name().to_string())
-                .collect();
+            return surface.items.iter().map(|i| i.name().to_string()).collect();
         }
         self.cabin_state()
             .map(|c| c.table_item_names())
@@ -561,22 +569,24 @@ impl GameState {
             self.player.modify_energy(-1.0);
             self.player.modify_mood(-1.0);
             if self.player.fullness < 10.0 {
-                self.pending_messages.push("Your stomach growls painfully. You need to eat soon.".to_string());
+                self.pending_messages
+                    .push("Your stomach growls painfully. You need to eat soon.".to_string());
             }
         }
         if self.player.hydration < 20.0 {
             self.player.modify_energy(-1.0);
             if self.player.hydration < 10.0 {
                 self.player.modify_health(-0.5);
-                self.pending_messages.push("Your mouth is dry and head swims. Drink water soon.".to_string());
+                self.pending_messages
+                    .push("Your mouth is dry and head swims. Drink water soon.".to_string());
             }
         }
 
         // Update player warmth based on environment
-        self.update_player_comfort();
+        self.update_player_comfort(map);
     }
 
-    fn update_player_comfort(&mut self) {
+    fn update_player_comfort(&mut self, map: &WorldMap) {
         let fire_heat = if matches!(self.player.room, Some(Room::CabinMain)) {
             self.cabin_state()
                 .map(|c| c.fireplace.heat_output())
@@ -586,17 +596,28 @@ impl GameState {
         };
 
         // Get position for temperature calculation
-        let (row, col) = self.player.position.as_usize().unwrap_or((5, 5));
+        let world_row = self.player.position.row;
+        let world_col = self.player.position.col;
+        let (row, col) = self
+            .player
+            .position
+            .as_usize()
+            .unwrap_or((MAP_ORIGIN_ROW as usize, MAP_ORIGIN_COL as usize));
+        let biome = map
+            .get_tile(row, col)
+            .map(|t| t.biome)
+            .unwrap_or(Biome::MixedForest);
+        let tod = self.time.time_of_day();
 
-        // This is simplified - would need map reference for full calculation
         let base_temp = match self.player.room {
-            Some(_) if fire_heat > 0.0 => 15.0 + fire_heat,
-            Some(_) => 12.0, // Indoor base temp
+            Some(_) if fire_heat > 0.0 => 18.0 + fire_heat,
+            Some(_) => 16.0, // Indoor base temp
             None => {
-                // Outdoor - use weather
-                let weather_temp = self.weather.get_for_position(row as i32, col as i32)
+                let weather_temp = self
+                    .weather
+                    .get_for_position(world_row, world_col)
                     .temperature_modifier();
-                15.0 + weather_temp
+                biome.base_temperature() + tod.temperature_modifier() + weather_temp
             }
         };
 
@@ -625,12 +646,9 @@ impl GameState {
         attempts: usize,
     ) -> Option<Position> {
         for _ in 0..attempts {
-            let row = rng.gen_range(0..MAP_HEIGHT as i32);
-            let col = rng.gen_range(0..MAP_WIDTH as i32);
+            let row = rng.gen_range(-MAP_EXTENT..=MAP_EXTENT);
+            let col = rng.gen_range(-MAP_EXTENT..=MAP_EXTENT);
             let pos = Position::new(row, col);
-            if !pos.is_valid() {
-                continue;
-            }
             if self
                 .objects
                 .objects_at(&pos)
@@ -639,10 +657,14 @@ impl GameState {
             {
                 continue;
             }
-            if let Some(tile) = map.get_tile(row as usize, col as usize) {
-                if matches!(tile.tile_type, TileType::Forest(_)) && tile.walkable {
-                    return Some(pos);
-                }
+            let Some((gr, gc)) = pos.as_usize() else {
+                continue;
+            };
+            let Some(tile) = map.get_tile(gr, gc) else {
+                continue;
+            };
+            if matches!(tile.tile_type, TileType::Forest(_)) && tile.walkable {
+                return Some(pos);
             }
         }
         None
@@ -660,8 +682,9 @@ impl GameState {
         let Some(pos) = self.find_free_tree_spot(map, rng, 50) else {
             return false;
         };
-        let kind = map
-            .get_tile(pos.row as usize, pos.col as usize)
+        let kind = pos
+            .as_usize()
+            .and_then(|(r, c)| map.get_tile(r, c))
             .map(|t| {
                 if matches!(t.biome, Biome::BambooGrove) {
                     TreeType::Bamboo
@@ -688,9 +711,9 @@ impl GameState {
 
     fn seed_bamboo_grove(&mut self) {
         let grove_positions = [
-            Position::new(6, 2),
-            Position::new(6, 3),
-            Position::new(7, 3),
+            Position::new(0, -2),
+            Position::new(0, -3),
+            Position::new(1, -2),
         ];
         for pos in grove_positions {
             if self
@@ -732,7 +755,9 @@ impl GameState {
     }
 
     pub fn display_name(&self, item: &Item) -> String {
-        self.custom_name(item).map(|s| s.to_string()).unwrap_or_else(|| item.name().to_string())
+        self.custom_name(item)
+            .map(|s| s.to_string())
+            .unwrap_or_else(|| item.name().to_string())
     }
 
     pub fn player_can_access_item(&self, item: &Item) -> bool {
@@ -773,7 +798,11 @@ impl World {
     pub fn new(state_path: std::path::PathBuf) -> Self {
         let map = WorldMap::new();
         let state = GameState::load_or_new(&state_path, &map);
-        Self { map, state, state_path }
+        Self {
+            map,
+            state,
+            state_path,
+        }
     }
 
     pub fn save(&self) -> Result<()> {

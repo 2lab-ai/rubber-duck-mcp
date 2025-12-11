@@ -1,6 +1,6 @@
+use super::map::Biome;
 use rand::Rng;
 use serde::{Deserialize, Serialize};
-use super::map::Biome;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 pub enum Weather {
@@ -69,30 +69,52 @@ impl Weather {
     pub fn possible_for_biome(biome: Biome) -> Vec<Weather> {
         match biome {
             Biome::Desert => vec![
-                Weather::Clear, Weather::Clear, Weather::Clear, // Higher chance
-                Weather::HeatWave, Weather::Sandstorm,
+                Weather::Clear,
+                Weather::Clear,
+                Weather::Clear, // Higher chance
+                Weather::HeatWave,
+                Weather::Sandstorm,
             ],
             Biome::Oasis => vec![
-                Weather::Clear, Weather::Clear, Weather::Cloudy,
+                Weather::Clear,
+                Weather::Clear,
+                Weather::Cloudy,
                 Weather::HeatWave,
             ],
             Biome::SpringForest => vec![
-                Weather::Clear, Weather::Cloudy, Weather::Overcast,
-                Weather::LightRain, Weather::Fog,
+                Weather::Clear,
+                Weather::Cloudy,
+                Weather::Overcast,
+                Weather::LightRain,
+                Weather::Fog,
             ],
             Biome::WinterForest => vec![
-                Weather::Clear, Weather::Cloudy, Weather::Overcast,
-                Weather::LightSnow, Weather::HeavySnow, Weather::Blizzard,
+                Weather::Clear,
+                Weather::Cloudy,
+                Weather::Overcast,
+                Weather::LightSnow,
+                Weather::HeavySnow,
+                Weather::Blizzard,
             ],
-            Biome::Lake => vec![
-                Weather::Clear, Weather::Cloudy, Weather::Fog,
-            ],
+            Biome::Lake => vec![Weather::Clear, Weather::Cloudy, Weather::Fog],
             Biome::BambooGrove => vec![
-                Weather::Clear, Weather::Cloudy, Weather::Fog, Weather::LightRain,
+                Weather::Clear,
+                Weather::Cloudy,
+                Weather::Fog,
+                Weather::LightRain,
+            ],
+            Biome::Clearing => vec![
+                Weather::Clear,
+                Weather::Cloudy,
+                Weather::Overcast,
+                Weather::LightRain,
             ],
             Biome::MixedForest | Biome::Path => vec![
-                Weather::Clear, Weather::Cloudy, Weather::Overcast,
-                Weather::LightRain, Weather::Fog,
+                Weather::Clear,
+                Weather::Cloudy,
+                Weather::Overcast,
+                Weather::LightRain,
+                Weather::Fog,
             ],
         }
     }
@@ -106,10 +128,10 @@ impl Weather {
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct RegionalWeather {
-    pub north: Weather,  // Spring/Autumn
-    pub south: Weather,  // Mixed
-    pub east: Weather,   // Winter
-    pub west: Weather,   // Desert
+    pub north: Weather, // Spring/Autumn
+    pub south: Weather, // Mixed
+    pub east: Weather,  // Winter
+    pub west: Weather,  // Desert
 }
 
 impl RegionalWeather {
@@ -140,16 +162,20 @@ impl RegionalWeather {
         }
     }
 
-    pub fn get_for_position(&self, row: i32, col: i32) -> Weather {
-        // Calculate which direction dominates
-        let center = 5.5f32;
-        let row_diff = row as f32 - center;
-        let col_diff = col as f32 - center;
-
-        if row_diff.abs() > col_diff.abs() {
-            if row_diff < 0.0 { self.north } else { self.south }
+    pub fn get_for_position(&self, world_row: i32, world_col: i32) -> Weather {
+        // Determine quadrant relative to world origin (0,0 at the cabin)
+        if world_row.abs() > world_col.abs() {
+            if world_row < 0 {
+                self.north
+            } else {
+                self.south
+            }
         } else {
-            if col_diff < 0.0 { self.west } else { self.east }
+            if world_col < 0 {
+                self.west
+            } else {
+                self.east
+            }
         }
     }
 }

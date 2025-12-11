@@ -1,7 +1,7 @@
+use crate::entity::objects::Item;
+use crate::world::Position;
 use rand::Rng;
 use serde::{Deserialize, Serialize};
-use crate::world::Position;
-use crate::entity::objects::Item;
 
 #[derive(Debug, Clone, Copy, Serialize, Deserialize)]
 pub enum TreeType {
@@ -106,7 +106,10 @@ impl Tree {
     }
 
     pub fn progress_text(&self) -> String {
-        format!("Chopping progress: {}/{}", self.hits_done, self.hits_required)
+        format!(
+            "Chopping progress: {}/{}",
+            self.hits_done, self.hits_required
+        )
     }
 
     pub fn default_trees() -> Vec<Self> {

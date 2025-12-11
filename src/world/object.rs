@@ -100,7 +100,10 @@ impl ObjectKind {
     }
 
     pub fn supports_surface(&self) -> bool {
-        matches!(self, ObjectKind::Cabin(_) | ObjectKind::WoodShed(_) | ObjectKind::Table | ObjectKind::Wall)
+        matches!(
+            self,
+            ObjectKind::Cabin(_) | ObjectKind::WoodShed(_) | ObjectKind::Table | ObjectKind::Wall
+        )
     }
 }
 
@@ -268,28 +271,24 @@ impl ObjectRegistry {
     }
 
     pub fn find_tree_mut_at(&mut self, position: &Position) -> Option<&mut Tree> {
-        self.placed
-            .iter_mut()
-            .find_map(|p| {
-                if &p.position == position {
-                    if let ObjectKind::Tree(tree) = &mut p.object.kind {
-                        return Some(tree);
-                    }
+        self.placed.iter_mut().find_map(|p| {
+            if &p.position == position {
+                if let ObjectKind::Tree(tree) = &mut p.object.kind {
+                    return Some(tree);
                 }
-                None
-            })
+            }
+            None
+        })
     }
 
     pub fn find_tree_at(&self, position: &Position) -> Option<&Tree> {
-        self.placed
-            .iter()
-            .find_map(|p| {
-                if &p.position == position {
-                    if let ObjectKind::Tree(tree) = &p.object.kind {
-                        return Some(tree);
-                    }
+        self.placed.iter().find_map(|p| {
+            if &p.position == position {
+                if let ObjectKind::Tree(tree) = &p.object.kind {
+                    return Some(tree);
                 }
-                None
-            })
+            }
+            None
+        })
     }
 }

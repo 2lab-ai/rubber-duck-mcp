@@ -1,0 +1,21 @@
+{
+  "task_id": 7,
+  "scope": "World & Systems: 11x11 Biome Map, Weather, Temperature",
+  "goal": "Rebuild the 11x11 map per GDD coordinates (desert/oasis west, lake center rows 1-5 cols 1-9, spring north, winter east, mixed south with path/cabin), and wire biome weather/temperature effects into descriptions and player warmth.",
+  "decisions": [
+    "Preserve the 11x11 grid but align biomes to the specified quadrants and path/cabin coordinates (start 10,5; cabin 6,5).",
+    "Define weather tables per biome (desert: clear/heat_wave/sandstorm; north: clear/cloudy/light_rain/fog; east: clear/light_snow/blizzard) and apply time-of-day temperature modifiers to player comfort.",
+    "Keep indoor rooms temperature-stable with fireplace heat adding to warmth when active."
+  ],
+  "plan": [
+    "Adjust map generation to match the GDD coordinates (desert/oasis west, lake center rows 1-5 cols 1-9, spring north, winter east, mixed/path south; cabin at 6,5 and start at 10,5).",
+    "Implement biome-specific weather tables and temperature modifiers (time-of-day + biome) and apply to player warmth/comfort in the tick loop.",
+    "Update descriptions/look to reflect the new biome layout and weather cues; verify persistence and start positions.",
+    "Run tests/build to ensure map generation, tick, and descriptions still function."
+  ],
+  "notes": [
+    "Keep serialization backward compatible; changes mostly impact map generation and runtime weather/temperature logic.",
+    "Cabin/WoodShed objects stay anchored at their coordinates.",
+    "Remaining gap: web map fog-of-war for unvisited tiles is still pending."
+  ]
+}

@@ -1,5 +1,5 @@
-use serde_json::{json, Value};
 use super::protocol::ToolDefinition;
+use serde_json::{json, Value};
 
 /// Get all available tool definitions
 pub fn get_tool_definitions() -> Vec<ToolDefinition> {

@@ -67,16 +67,25 @@ impl TimeOfDay {
     }
 
     pub fn is_daytime(&self) -> bool {
-        matches!(self, TimeOfDay::Morning | TimeOfDay::Noon | TimeOfDay::Afternoon)
+        matches!(
+            self,
+            TimeOfDay::Morning | TimeOfDay::Noon | TimeOfDay::Afternoon
+        )
     }
 
     pub fn is_night(&self) -> bool {
-        matches!(self, TimeOfDay::Evening | TimeOfDay::Night | TimeOfDay::Midnight)
+        matches!(
+            self,
+            TimeOfDay::Evening | TimeOfDay::Night | TimeOfDay::Midnight
+        )
     }
 
     /// Can aurora be visible?
     pub fn aurora_visible(&self) -> bool {
-        matches!(self, TimeOfDay::Evening | TimeOfDay::Night | TimeOfDay::Midnight | TimeOfDay::Dawn)
+        matches!(
+            self,
+            TimeOfDay::Evening | TimeOfDay::Night | TimeOfDay::Midnight | TimeOfDay::Dawn
+        )
     }
 
     /// Sunrise visible from north (towards mountains)?
@@ -88,16 +97,16 @@ impl TimeOfDay {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct WorldTime {
     pub day: u32,
-    pub hour: u8,      // 0-23
-    pub minute: u8,    // 0-59
-    pub tick: u64,     // Total simulation ticks
+    pub hour: u8,   // 0-23
+    pub minute: u8, // 0-59
+    pub tick: u64,  // Total simulation ticks
 }
 
 impl WorldTime {
     pub fn new() -> Self {
         Self {
             day: 1,
-            hour: 8,  // Start at 8 AM
+            hour: 8, // Start at 8 AM
             minute: 0,
             tick: 0,
         }
@@ -132,11 +141,21 @@ impl WorldTime {
     pub fn time_description(&self) -> String {
         let tod = self.time_of_day();
         let period = if self.hour < 12 { "AM" } else { "PM" };
-        let display_hour = if self.hour == 0 { 12 }
-            else if self.hour > 12 { self.hour - 12 }
-            else { self.hour };
+        let display_hour = if self.hour == 0 {
+            12
+        } else if self.hour > 12 {
+            self.hour - 12
+        } else {
+            self.hour
+        };
 
-        format!("{} ({}:{:02} {})", tod.name(), display_hour, self.minute, period)
+        format!(
+            "{} ({}:{:02} {})",
+            tod.name(),
+            display_hour,
+            self.minute,
+            period
+        )
     }
 }
 

@@ -1,14 +1,18 @@
-use rand::Rng;
-use crate::entity::{Room, Item, Blueprint, BookEntry};
-use crate::world::WorldMap;
+use crate::entity::{Blueprint, BookEntry, Item, Room};
 use crate::persistence::GameState;
+use crate::world::WorldMap;
+use rand::Rng;
 
 pub enum InteractionResult {
     Success(String),
     Failure(String),
     ItemObtained(Item, String),
     ItemLost(Item, String),
-    ActionSuccess { message: String, time_cost: u32, energy_cost: f32 },
+    ActionSuccess {
+        message: String,
+        time_cost: u32,
+        energy_cost: f32,
+    },
 }
 
 // ... (Duck constants omit for brevity, will include) ...
@@ -124,7 +128,9 @@ const DUCK_MANNER: &[&str] = &[
 
 fn random_duck_phrase(rng: &mut impl rand::Rng) -> String {
     use rand::seq::SliceRandom;
-    let part_a = DUCK_GAZE.choose(rng).unwrap_or(&"The rubber duck is very present.");
+    let part_a = DUCK_GAZE
+        .choose(rng)
+        .unwrap_or(&"The rubber duck is very present.");
     let part_b = DUCK_MANNER.choose(rng).unwrap_or(&"It stays very still.");
     format!("{} {}", part_a, part_b)
 }
@@ -154,7 +160,10 @@ pub fn try_open(target: &str, state: &mut GameState) -> InteractionResult {
             return InteractionResult::Failure("You're too far from the cabin door.".to_string());
         }
         cabin.door_open = true;
-        InteractionResult::Success("You grasp the worn iron handle and pull. The door swings open with a soft creak.".to_string())
+        InteractionResult::Success(
+            "You grasp the worn iron handle and pull. The door swings open with a soft creak."
+                .to_string(),
+        )
     } else {
         InteractionResult::Failure(format!("You don't see a '{}' to open.", target))
     }
@@ -182,7 +191,9 @@ pub fn try_close(target: &str, state: &mut GameState) -> InteractionResult {
             return InteractionResult::Failure("You're too far from the cabin door.".to_string());
         }
         cabin.door_open = false;
-        InteractionResult::Success("You push the door closed. It latches with a satisfying click.".to_string())
+        InteractionResult::Success(
+            "You push the door closed. It latches with a satisfying click.".to_string(),
+        )
     } else {
         InteractionResult::Failure(format!("You don't see a '{}' to close.", target))
     }
@@ -191,7 +202,9 @@ pub fn try_close(target: &str, state: &mut GameState) -> InteractionResult {
 pub fn try_take(item_name: &str, state: &mut GameState, map: &mut WorldMap) -> InteractionResult {
     let item = match Item::from_str(item_name) {
         Some(i) => i,
-        None => return InteractionResult::Failure(format!("You don't know what '{}' is.", item_name)),
+        None => {
+            return InteractionResult::Failure(format!("You don't know what '{}' is.", item_name))
+        }
     };
 
     let player_room = state.player.room.clone();
@@ -207,7 +220,10 @@ pub fn try_take(item_name: &str, state: &mut GameState, map: &mut WorldMap) -> I
             if from_cabin_floor {
                 if state.player.inventory.add(item.clone(), 1) {
                     state.on_player_pickup(&item);
-                    return InteractionResult::ItemObtained(item.clone(), format!("You pick up the {}.", item.name()));
+                    return InteractionResult::ItemObtained(
+                        item.clone(),
+                        format!("You pick up the {}.", item.name()),
+                    );
                 } else {
                     if let Some(cabin) = state.cabin_state_mut() {
                         cabin.add_item(item.clone());
@@ -219,7 +235,10 @@ pub fn try_take(item_name: &str, state: &mut GameState, map: &mut WorldMap) -> I
             if state.take_table_item(&item) {
                 if state.player.inventory.add(item.clone(), 1) {
                     state.on_player_pickup(&item);
-                    return InteractionResult::ItemObtained(item.clone(), format!("You lift the {} from the table.", item.name()));
+                    return InteractionResult::ItemObtained(
+                        item.clone(),
+                        format!("You lift the {} from the table.", item.name()),
+                    );
                 } else {
                     state.add_table_item(item.clone());
                     return InteractionResult::Failure("Too heavy.".to_string());
@@ -237,7 +256,10 @@ pub fn try_take(item_name: &str, state: &mut GameState, map: &mut WorldMap) -> I
                 }
                 if took && state.player.inventory.add(Item::Matchbox, 1) {
                     state.on_player_pickup(&Item::Matchbox);
-                    return InteractionResult::ItemObtained(Item::Matchbox, "You take the matchbox from the mantelpiece.".to_string());
+                    return InteractionResult::ItemObtained(
+                        Item::Matchbox,
+                        "You take the matchbox from the mantelpiece.".to_string(),
+                    );
                 } else if took {
                     if let Some(cabin) = state.cabin_state_mut() {
                         cabin.add_item(Item::Matchbox);
@@ -260,7 +282,10 @@ pub fn try_take(item_name: &str, state: &mut GameState, map: &mut WorldMap) -> I
                 if picked_up {
                     if state.player.inventory.add(Item::Axe, 1) {
                         state.on_player_pickup(&Item::Axe);
-                        return InteractionResult::ItemObtained(Item::Axe, "You pick up the heavy axe.".to_string());
+                        return InteractionResult::ItemObtained(
+                            Item::Axe,
+                            "You pick up the heavy axe.".to_string(),
+                        );
                     } else {
                         if let Some(wood_shed) = state.wood_shed_state_mut() {
                             wood_shed.axe_on_floor = true;
@@ -284,7 +309,10 @@ pub fn try_take(item_name: &str, state: &mut GameState, map: &mut WorldMap) -> I
                     if state.player.inventory.add(Item::Log, 1) {
                         state.on_player_pickup(&Item::Log);
                         let remaining = state.wood_shed_state().map(|w| w.logs).unwrap_or(0);
-                        return InteractionResult::ItemObtained(Item::Log, format!("You heft a heavy log. {} remain.", remaining));
+                        return InteractionResult::ItemObtained(
+                            Item::Log,
+                            format!("You heft a heavy log. {} remain.", remaining),
+                        );
                     } else {
                         if let Some(wood_shed) = state.wood_shed_state_mut() {
                             wood_shed.logs += 1;
@@ -307,7 +335,10 @@ pub fn try_take(item_name: &str, state: &mut GameState, map: &mut WorldMap) -> I
                 if took_firewood {
                     if state.player.inventory.add(Item::Firewood, 1) {
                         state.on_player_pickup(&Item::Firewood);
-                        return InteractionResult::ItemObtained(Item::Firewood, "You gather a piece of split firewood.".to_string());
+                        return InteractionResult::ItemObtained(
+                            Item::Firewood,
+                            "You gather a piece of split firewood.".to_string(),
+                        );
                     } else {
                         if let Some(wood_shed) = state.wood_shed_state_mut() {
                             wood_shed.firewood += 1;
@@ -324,10 +355,15 @@ pub fn try_take(item_name: &str, state: &mut GameState, map: &mut WorldMap) -> I
                     if tile.items.take(&item) {
                         if state.player.inventory.add(item.clone(), 1) {
                             state.on_player_pickup(&item);
-                            return InteractionResult::ItemObtained(item.clone(), format!("You pick up the {}.", item.name()));
+                            return InteractionResult::ItemObtained(
+                                item.clone(),
+                                format!("You pick up the {}.", item.name()),
+                            );
                         } else {
                             tile.items.add(item.clone(), 1); // Put it back
-                            return InteractionResult::Failure("Your inventory is too heavy.".to_string());
+                            return InteractionResult::Failure(
+                                "Your inventory is too heavy.".to_string(),
+                            );
                         }
                     }
                 }
@@ -335,13 +371,18 @@ pub fn try_take(item_name: &str, state: &mut GameState, map: &mut WorldMap) -> I
         }
         _ => {}
     }
-    InteractionResult::Failure(format!("You don't see any {} here that you can take.", item_name))
+    InteractionResult::Failure(format!(
+        "You don't see any {} here that you can take.",
+        item_name
+    ))
 }
 
 pub fn try_drop(item_name: &str, state: &mut GameState) -> InteractionResult {
     let item = match Item::from_str(item_name) {
         Some(i) => i,
-        None => return InteractionResult::Failure(format!("You don't know what '{}' is.", item_name)),
+        None => {
+            return InteractionResult::Failure(format!("You don't know what '{}' is.", item_name))
+        }
     };
     if !state.player.inventory.has(&item, 1) {
         return InteractionResult::Failure(format!("You don't have any {}.", item.name()));
@@ -375,13 +416,14 @@ pub fn try_drop(item_name: &str, state: &mut GameState) -> InteractionResult {
 pub fn examine(target: &str, state: &GameState) -> String {
     let normalized = target.to_lowercase();
     let player = &state.player;
-    
+
     // Check for active project
     if normalized.contains("blueprint") || normalized.contains("project") {
         if let Some(bp) = &player.active_project {
             return bp.status_description();
         } else {
-            return "You don't have any active blueprint. Use 'create [item]' to start one.".to_string();
+            return "You don't have any active blueprint. Use 'create [item]' to start one."
+                .to_string();
         }
     }
 
@@ -405,18 +447,28 @@ pub fn examine(target: &str, state: &GameState) -> String {
             }
             if normalized.contains("table") {
                 let items = state.table_item_names();
-                return if items.is_empty() { "A sturdy wooden table, surface clear.".to_string() } else { format!("A sturdy wooden table, holding: {}.", items.join(", ")) };
+                return if items.is_empty() {
+                    "A sturdy wooden table, surface clear.".to_string()
+                } else {
+                    format!("A sturdy wooden table, holding: {}.", items.join(", "))
+                };
             }
             // ... (other examine logic)
         }
         _ => {}
     }
     // ... (self examine)
-    if normalized.contains("self") || normalized == "me" { return state.player.status_summary(); }
+    if normalized.contains("self") || normalized == "me" {
+        return state.player.status_summary();
+    }
     format!("You don't see anything special about '{}'.", target)
 }
 
-pub fn talk_to_rubber_duck(message: Option<&str>, state: &GameState, duck_name: &str) -> InteractionResult {
+pub fn talk_to_rubber_duck(
+    message: Option<&str>,
+    state: &GameState,
+    duck_name: &str,
+) -> InteractionResult {
     let holding_duck = state.player.inventory.has(&Item::RubberDuck, 1);
     let duck_on_table = state
         .table_surface()
@@ -439,7 +491,10 @@ pub fn talk_to_rubber_duck(message: Option<&str>, state: &GameState, duck_name: 
     let middle = "The rubber duck seems lost in thought...";
     let contemplation = random_duck_phrase(&mut rng);
     let closer = format!("{}: ...", duck_name);
-    InteractionResult::Success(format!("{}{}\n{}\n{}", opener, middle, contemplation, closer))
+    InteractionResult::Success(format!(
+        "{}{}\n{}\n{}",
+        opener, middle, contemplation, closer
+    ))
 }
 
 // --- NEW UNIVERSAL USE HANDLER ---
@@ -474,12 +529,17 @@ pub fn try_use(
 
     let item = match Item::from_str(item_query) {
         Some(i) => i,
-        None => return InteractionResult::Failure(format!("You don't know what '{}' is.", item_name)),
+        None => {
+            return InteractionResult::Failure(format!("You don't know what '{}' is.", item_name))
+        }
     };
 
     let mut has_item = state.player.inventory.has(&item, 1);
     if !has_item
-        && matches!(item, Item::Book | Item::TutorialBook | Item::OldBook | Item::DeathNote | Item::BlankBook)
+        && matches!(
+            item,
+            Item::Book | Item::TutorialBook | Item::OldBook | Item::DeathNote | Item::BlankBook
+        )
         && matches!(state.player.room, Some(Room::CabinMain))
     {
         if let Some(cabin) = state.cabin_state() {
@@ -495,11 +555,16 @@ pub fn try_use(
         return InteractionResult::Failure(format!("You don't have a {}.", item.name()));
     }
 
-    if matches!(item, Item::Book | Item::TutorialBook | Item::OldBook | Item::DeathNote) {
+    if matches!(
+        item,
+        Item::Book | Item::TutorialBook | Item::OldBook | Item::DeathNote
+    ) {
         return handle_book_use(state, &item, target_str);
     }
     if item == Item::BlankBook {
-        return InteractionResult::Failure("It's a blank book. Title it first with 'write 제목:<title> on 빈 책'.".to_string());
+        return InteractionResult::Failure(
+            "It's a blank book. Title it first with 'write 제목:<title> on 빈 책'.".to_string(),
+        );
     }
 
     // 1. Blueprint Interaction (Building)
@@ -528,17 +593,17 @@ pub fn try_use(
             }
         }
         if target.contains("tree") || target.contains("wood") || target.contains("log") {
-             if item == Item::Axe || item == Item::StoneAxe {
-                 // Check if it's chopping block or standing tree
-                 if target.contains("block") || target.contains("chop") {
-                     return try_chop_firewood(state);
-                 } else {
-                     return try_chop_tree(state, _map);
-                 }
-             }
+            if item == Item::Axe || item == Item::StoneAxe {
+                // Check if it's chopping block or standing tree
+                if target.contains("block") || target.contains("chop") {
+                    return try_chop_firewood(state);
+                } else {
+                    return try_chop_tree(state, _map);
+                }
+            }
         }
         if target.contains("bush") || target.contains("shrub") || target.contains("ground") {
-             return handle_foraging(state, Some(&item));
+            return handle_foraging(state, Some(&item));
         }
     }
 
@@ -551,7 +616,8 @@ pub fn try_use(
                     state.player.inventory.add(Item::Kindling, 4);
                     state.player.skills.improve("woodcutting", 2);
                     return InteractionResult::ActionSuccess {
-                        message: "You whittle the log down into a pile of fine kindling.".to_string(),
+                        message: "You whittle the log down into a pile of fine kindling."
+                            .to_string(),
                         time_cost: 2, // 20 mins
                         energy_cost: 10.0,
                     };
@@ -575,17 +641,20 @@ pub fn try_use(
                     state.player.inventory.add(Item::Paper, 3);
                     state.player.skills.improve("tailoring", 2);
                     return InteractionResult::ActionSuccess {
-                        message: "You split the bamboo and press it into thin sheets of paper.".to_string(),
+                        message: "You split the bamboo and press it into thin sheets of paper."
+                            .to_string(),
                         time_cost: 2,
                         energy_cost: 6.0,
                     };
                 } else {
-                    return InteractionResult::Failure("You need bamboo in your inventory to cut into paper.".to_string());
+                    return InteractionResult::Failure(
+                        "You need bamboo in your inventory to cut into paper.".to_string(),
+                    );
                 }
             }
         }
     }
-    
+
     // Stone on Stone -> Sharp Stone
     if item == Item::Stone {
         if let Some(target) = target_str {
@@ -595,12 +664,15 @@ pub fn try_use(
                     state.player.inventory.add(Item::SharpStone, 1);
                     state.player.skills.improve("stonemasonry", 5);
                     return InteractionResult::ActionSuccess {
-                        message: "You smash the stones together, flaking off a razor-sharp edge.".to_string(),
+                        message: "You smash the stones together, flaking off a razor-sharp edge."
+                            .to_string(),
                         time_cost: 1,
                         energy_cost: 5.0,
                     };
                 } else {
-                    return InteractionResult::Failure("You need another stone to knap against.".to_string());
+                    return InteractionResult::Failure(
+                        "You need another stone to knap against.".to_string(),
+                    );
                 }
             }
         }
@@ -618,14 +690,18 @@ pub fn try_use(
                 energy_cost: 3.0,
             };
         } else {
-            return InteractionResult::Failure("You need at least 5 sheets of paper to bind a blank book.".to_string());
+            return InteractionResult::Failure(
+                "You need at least 5 sheets of paper to bind a blank book.".to_string(),
+            );
         }
     }
 
     // 4. Fire Interaction
-    let is_fire_target = target_str.map(|t| t.contains("fire") || t.contains("hearth")).unwrap_or(false);
+    let is_fire_target = target_str
+        .map(|t| t.contains("fire") || t.contains("hearth"))
+        .unwrap_or(false);
     let in_cabin = matches!(state.player.room, Some(Room::CabinMain));
-    
+
     if is_fire_target || (in_cabin && target_str.is_none()) {
         if item.is_flammable() {
             return handle_add_fuel(state, item);
@@ -636,7 +712,10 @@ pub fn try_use(
     }
 
     // 5. Consumption (Food/Drink)
-    if matches!(item, Item::Apple | Item::WildBerry | Item::HerbalTea | Item::Date) {
+    if matches!(
+        item,
+        Item::Apple | Item::WildBerry | Item::HerbalTea | Item::Date
+    ) {
         return handle_consumption(state, item);
     }
 
@@ -671,15 +750,21 @@ fn handle_book_use(state: &mut GameState, item: &Item, target: Option<&str>) -> 
     } else {
         accessible_ids.sort();
         let listing = if accessible_ids.is_empty() {
-            "No book IDs available. Bind a blank book first with 'write 제목:<title> on 빈 책'.".to_string()
+            "No book IDs available. Bind a blank book first with 'write 제목:<title> on 빈 책'."
+                .to_string()
         } else {
-            format!("Specify which book to read. Available: {}", accessible_ids.join(", "))
+            format!(
+                "Specify which book to read. Available: {}",
+                accessible_ids.join(", ")
+            )
         };
         return InteractionResult::Failure(listing);
     };
 
     if !state.player_or_cabin_has_book(&book_id) {
-        return InteractionResult::Failure("You need to hold that book (or be next to it in the cabin).".to_string());
+        return InteractionResult::Failure(
+            "You need to hold that book (or be next to it in the cabin).".to_string(),
+        );
     }
 
     let Some(book) = state.books.get(&book_id) else {
@@ -744,28 +829,37 @@ fn handle_blueprint_interaction(state: &mut GameState, item: &Item) -> Interacti
                 };
             }
         } else {
-            return InteractionResult::Failure(format!("The {} doesn't need any (more) {}.", bp.target_item.name(), item.name()));
+            return InteractionResult::Failure(format!(
+                "The {} doesn't need any (more) {}.",
+                bp.target_item.name(),
+                item.name()
+            ));
         }
     } else {
-        return InteractionResult::Failure("You don't have an active blueprint. Use 'create [item]' first.".to_string());
+        return InteractionResult::Failure(
+            "You don't have an active blueprint. Use 'create [item]' first.".to_string(),
+        );
     }
 
     if let Some(bp) = state.player.active_project.take() {
         state.player.inventory.add(bp.target_item.clone(), 1);
-        
+
         // Skill gain based on item type
         match bp.target_item {
             Item::StoneKnife | Item::StoneAxe => state.player.skills.improve("stonemasonry", 10),
             Item::Campfire => state.player.skills.improve("survival", 5),
             Item::Cordage => state.player.skills.improve("tailoring", 5),
-            _ => {},
+            _ => {}
         }
 
         let time_cost = ((bp.time_cost + 9) / 10).max(1);
         let energy_cost = (time_cost as f32 * 2.0).max(5.0);
 
         return InteractionResult::ActionSuccess {
-            message: format!("You finish crafting the {}. It is ready to use.", bp.target_item.name()),
+            message: format!(
+                "You finish crafting the {}. It is ready to use.",
+                bp.target_item.name()
+            ),
             time_cost,
             energy_cost,
         };
@@ -778,7 +872,7 @@ fn handle_foraging(state: &mut GameState, tool: Option<&Item>) -> InteractionRes
     // Basic foraging with hands or knife
     let mut rng = rand::thread_rng();
     let skill = state.player.skills.get("foraging");
-    
+
     // Check energy
     if state.player.energy < 5.0 {
         return InteractionResult::Failure("You are too exhausted to forage.".to_string());
@@ -788,18 +882,25 @@ fn handle_foraging(state: &mut GameState, tool: Option<&Item>) -> InteractionRes
         tool,
         Some(Item::Knife | Item::StoneKnife | Item::Axe | Item::StoneAxe)
     );
-    let success_chance = (0.6 + (skill as f64 * 0.005) + if tool_bonus { 0.1 } else { 0.0 }).min(0.95);
+    let success_chance =
+        (0.6 + (skill as f64 * 0.005) + if tool_bonus { 0.1 } else { 0.0 }).min(0.95);
 
     // Drops
     let drops = if rng.gen_bool(success_chance) {
         // Success
         state.player.inventory.add(Item::Stick, 1);
-        if rng.gen_bool(0.3) { state.player.inventory.add(Item::PlantFiber, 1); }
-        if rng.gen_bool(0.2) { state.player.inventory.add(Item::Stone, 1); }
-        if rng.gen_bool(0.1) { state.player.inventory.add(Item::WildBerry, 1); }
-        
+        if rng.gen_bool(0.3) {
+            state.player.inventory.add(Item::PlantFiber, 1);
+        }
+        if rng.gen_bool(0.2) {
+            state.player.inventory.add(Item::Stone, 1);
+        }
+        if rng.gen_bool(0.1) {
+            state.player.inventory.add(Item::WildBerry, 1);
+        }
+
         state.player.skills.improve("foraging", 1);
-        
+
         InteractionResult::ActionSuccess {
             message: "You rummage through the brush and find useful materials.".to_string(),
             time_cost: 1, // 10 mins
@@ -842,7 +943,9 @@ fn try_chop_firewood(state: &mut GameState) -> InteractionResult {
 fn try_chop_tree(state: &mut GameState, _map: &WorldMap) -> InteractionResult {
     let player_pos = state.player.position;
     let Some(tree) = state.objects.find_tree_mut_at(&player_pos) else {
-        return InteractionResult::Failure("There isn't a standing tree right here to chop.".to_string());
+        return InteractionResult::Failure(
+            "There isn't a standing tree right here to chop.".to_string(),
+        );
     };
     if tree.felled {
         return InteractionResult::Failure("This tree has already been felled.".to_string());
@@ -864,7 +967,7 @@ fn try_chop_tree(state: &mut GameState, _map: &WorldMap) -> InteractionResult {
     state.player.inventory.add(Item::Kindling, 1);
     state.player.inventory.add(Item::Bark, 1);
     state.player.skills.improve("woodcutting", 5);
-    
+
     InteractionResult::ActionSuccess {
         message: "You fell a tree! Timber!".to_string(),
         time_cost: 6, // 1 hour
@@ -877,8 +980,16 @@ fn handle_add_fuel(state: &mut GameState, item: Item) -> InteractionResult {
     if let Some(cabin) = state.cabin_state_mut() {
         if cabin.fireplace.add_fuel_item(item) {
             state.player.skills.improve("fire_making", 1);
-            let time_cost = if matches!(item, Item::Log | Item::Firewood) { 2 } else { 1 };
-            let energy_cost = if matches!(item, Item::Log | Item::Firewood) { 3.0 } else { 1.0 };
+            let time_cost = if matches!(item, Item::Log | Item::Firewood) {
+                2
+            } else {
+                1
+            };
+            let energy_cost = if matches!(item, Item::Log | Item::Firewood) {
+                3.0
+            } else {
+                1.0
+            };
             return InteractionResult::ActionSuccess {
                 message: format!("You add {} to the fire.", item.name()),
                 time_cost,
@@ -900,7 +1011,9 @@ fn handle_light_fire(state: &mut GameState) -> InteractionResult {
                 energy_cost: 1.0,
             };
         } else {
-            return InteractionResult::Failure("You need tinder and fuel to start a fire.".to_string());
+            return InteractionResult::Failure(
+                "You need tinder and fuel to start a fire.".to_string(),
+            );
         }
     }
     InteractionResult::Failure("There's no hearth here.".to_string())
@@ -912,7 +1025,7 @@ fn handle_consumption(state: &mut GameState, item: Item) -> InteractionResult {
         Item::Apple => {
             state.player.modify_fullness(15.0);
             "You eat the apple.".to_string()
-        },
+        }
         // ... other items
         _ => format!("You consume the {}.", item.name()),
     };
@@ -936,7 +1049,7 @@ pub fn try_create(item_name: &str, state: &mut GameState) -> InteractionResult {
         let time_cost = bp.time_cost;
         state.player.active_project = Some(bp);
         InteractionResult::Success(format!(
-            "You lay out plans for a {}. Requires: {}. Total build time: {} mins.", 
+            "You lay out plans for a {}. Requires: {}. Total build time: {} mins.",
             target_item.name(),
             progress,
             time_cost
@@ -957,12 +1070,20 @@ pub fn write_on_book(text: &str, target: &str, state: &mut GameState) -> Interac
     let is_page = lower.starts_with("페이지") || lower.starts_with("page");
 
     if is_title {
-        let title = content.split_once(':').map(|(_, t)| t.trim()).unwrap_or("").to_string();
+        let title = content
+            .split_once(':')
+            .map(|(_, t)| t.trim())
+            .unwrap_or("")
+            .to_string();
         if title.is_empty() {
-            return InteractionResult::Failure("Please provide a title after '제목:' or 'title:'.".to_string());
+            return InteractionResult::Failure(
+                "Please provide a title after '제목:' or 'title:'.".to_string(),
+            );
         }
         if !state.player.inventory.has(&Item::BlankBook, 1) {
-            return InteractionResult::Failure("You need a blank book to bind a title.".to_string());
+            return InteractionResult::Failure(
+                "You need a blank book to bind a title.".to_string(),
+            );
         }
         state.player.inventory.remove(&Item::BlankBook, 1);
         state.player.inventory.add(Item::Book, 1);
@@ -983,13 +1104,19 @@ pub fn write_on_book(text: &str, target: &str, state: &mut GameState) -> Interac
 
     let (page_spec, body) = match content.split_once(':') {
         Some(parts) => parts,
-        None => return InteractionResult::Failure("Use '페이지<number>:<text>' to write a page.".to_string()),
+        None => {
+            return InteractionResult::Failure(
+                "Use '페이지<number>:<text>' to write a page.".to_string(),
+            )
+        }
     };
 
     let digits: String = page_spec.chars().filter(|c| c.is_ascii_digit()).collect();
     let page_num: usize = digits.parse().unwrap_or(0);
     if page_num == 0 {
-        return InteractionResult::Failure("Specify a page number like 페이지1 or page2.".to_string());
+        return InteractionResult::Failure(
+            "Specify a page number like 페이지1 or page2.".to_string(),
+        );
     }
 
     let book_id = {
@@ -1005,7 +1132,9 @@ pub fn write_on_book(text: &str, target: &str, state: &mut GameState) -> Interac
     };
 
     if book_id.is_empty() {
-        return InteractionResult::Failure("Please specify which book to write in (e.g., on book-3).".to_string());
+        return InteractionResult::Failure(
+            "Please specify which book to write in (e.g., on book-3).".to_string(),
+        );
     }
 
     let book_in_cabin = matches!(state.player.room, Some(Room::CabinMain))
@@ -1014,7 +1143,9 @@ pub fn write_on_book(text: &str, target: &str, state: &mut GameState) -> Interac
             .map(|c| c.book_ids.iter().any(|b| b == &book_id))
             .unwrap_or(false);
     if !state.player_has_book(&book_id) && !book_in_cabin {
-        return InteractionResult::Failure("You need to hold the book (or be next to it in the cabin) to write in it.".to_string());
+        return InteractionResult::Failure(
+            "You need to hold the book (or be next to it in the cabin) to write in it.".to_string(),
+        );
     }
 
     let Some(book) = state.book_entry_mut(&book_id) else {
@@ -1026,7 +1157,10 @@ pub fn write_on_book(text: &str, target: &str, state: &mut GameState) -> Interac
 
     book.set_page(page_num - 1, body.trim());
     InteractionResult::ActionSuccess {
-        message: format!("You write on page {} of {} ({})", page_num, book.title, book.id),
+        message: format!(
+            "You write on page {} of {} ({})",
+            page_num, book.title, book.id
+        ),
         time_cost: 1,
         energy_cost: 1.0,
     }

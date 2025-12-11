@@ -1,16 +1,16 @@
-mod world;
-mod entity;
 mod actions;
 mod descriptions;
-mod persistence;
+mod entity;
 mod mcp;
+mod persistence;
+mod world;
 
-use std::path::PathBuf;
 use anyhow::Result;
-use tracing_subscriber::EnvFilter;
+use std::path::PathBuf;
 use std::thread;
-use tiny_http::{Server, Response, Request, Method};
 use std::time::Duration;
+use tiny_http::{Method, Request, Response, Server};
+use tracing_subscriber::EnvFilter;
 
 fn main() -> Result<()> {
     // Initialize logging to stderr (so it doesn't interfere with MCP protocol on stdout)
@@ -99,27 +99,44 @@ fn start_web_server(state_path: PathBuf, log_path: PathBuf) {
     });
 }
 
-fn handle_http_request(rq: Request, state_path: &PathBuf, log_path: &PathBuf, map: &world::WorldMap) {
+fn handle_http_request(
+    rq: Request,
+    state_path: &PathBuf,
+    log_path: &PathBuf,
+    map: &world::WorldMap,
+) {
     let url = rq.url().to_string();
     let method = rq.method().clone();
     match (method, url.as_str()) {
         (Method::Get, "/") => {
             let body = build_index_html();
-            let _ = rq.respond(Response::from_string(body).with_header(
-                tiny_http::Header::from_bytes(&b"Content-Type"[..], &b"text/html; charset=utf-8"[..]).unwrap()
-            ));
+            let _ = rq.respond(
+                Response::from_string(body).with_header(
+                    tiny_http::Header::from_bytes(
+                        &b"Content-Type"[..],
+                        &b"text/html; charset=utf-8"[..],
+                    )
+                    .unwrap(),
+                ),
+            );
         }
         (Method::Get, "/state") => {
             let body = build_state_json(state_path, map);
-            let _ = rq.respond(Response::from_string(body).with_header(
-                tiny_http::Header::from_bytes(&b"Content-Type"[..], &b"application/json"[..]).unwrap()
-            ));
+            let _ = rq.respond(
+                Response::from_string(body).with_header(
+                    tiny_http::Header::from_bytes(&b"Content-Type"[..], &b"application/json"[..])
+                        .unwrap(),
+                ),
+            );
         }
         (Method::Get, "/log") => {
             let body = build_log_json(log_path);
-            let _ = rq.respond(Response::from_string(body).with_header(
-                tiny_http::Header::from_bytes(&b"Content-Type"[..], &b"application/json"[..]).unwrap()
-            ));
+            let _ = rq.respond(
+                Response::from_string(body).with_header(
+                    tiny_http::Header::from_bytes(&b"Content-Type"[..], &b"application/json"[..])
+                        .unwrap(),
+                ),
+            );
         }
         _ => {
             let _ = rq.respond(Response::from_string("Not Found").with_status_code(404));
@@ -264,10 +281,14 @@ fn build_state_json(state_path: &PathBuf, map: &world::WorldMap) -> String {
                     world::TileType::Path => "Path",
                     world::TileType::Clearing => "Clearing",
                     world::TileType::Forest(_) => "Forest",
-                }.to_string();
+                }
+                .to_string();
 
                 if let Some(objects) = &object_view {
-                    let pos = world::Position::new(r as i32, c as i32);
+                    let pos = world::Position::new(
+                        r as i32 - world::map::MAP_ORIGIN_ROW,
+                        c as i32 - world::map::MAP_ORIGIN_COL,
+                    );
                     if objects
                         .objects_at(&pos)
                         .iter()
@@ -283,7 +304,10 @@ fn build_state_json(state_path: &PathBuf, map: &world::WorldMap) -> String {
                     }
                 }
 
-                row.push(TileView { biome: t.biome.name().to_string(), tile });
+                row.push(TileView {
+                    biome: t.biome.name().to_string(),
+                    tile,
+                });
             }
         }
         tiles.push(row);
@@ -301,7 +325,8 @@ fn build_state_json(state_path: &PathBuf, map: &world::WorldMap) -> String {
         height: world::map::MAP_HEIGHT,
         player: player_pos,
         tiles,
-    }).unwrap_or_else(|_| "{}".to_string())
+    })
+    .unwrap_or_else(|_| "{}".to_string())
 }
 
 fn build_log_json(log_path: &PathBuf) -> String {

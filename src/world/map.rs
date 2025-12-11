@@ -1,9 +1,12 @@
-use serde::{Deserialize, Serialize};
 use crate::entity::{Item, LocationItems};
 use rand::Rng;
+use serde::{Deserialize, Serialize};
 
-pub const MAP_WIDTH: usize = 11;
-pub const MAP_HEIGHT: usize = 11;
+pub const MAP_EXTENT: i32 = 50; // world coords span -50..50
+pub const MAP_WIDTH: usize = (MAP_EXTENT as usize * 2) + 1;
+pub const MAP_HEIGHT: usize = (MAP_EXTENT as usize * 2) + 1;
+pub const MAP_ORIGIN_ROW: i32 = MAP_EXTENT;
+pub const MAP_ORIGIN_COL: i32 = MAP_EXTENT;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 pub enum Direction {
@@ -52,14 +55,15 @@ impl Direction {
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 pub enum Biome {
-    Desert,      // West - hot summer
-    Oasis,       // West lake edge
+    Desert,       // West - hot summer
+    Oasis,        // West lake edge
     SpringForest, // North - mild spring/autumn
     WinterForest, // East - cold winter/snow
-    Lake,        // Central lake
-    MixedForest, // South and general forest
-    Path,        // The path from start to cabin
-    BambooGrove, // Lakeside bamboo
+    Lake,         // Central lake
+    MixedForest,  // South and general forest
+    Path,         // The path from start to cabin
+    BambooGrove,  // Lakeside bamboo
+    Clearing,     // Cabin clearing
 }
 
 impl Biome {
@@ -73,6 +77,7 @@ impl Biome {
             Biome::MixedForest => 20.0,
             Biome::Path => 20.0,
             Biome::BambooGrove => 22.0,
+            Biome::Clearing => 20.0,
         }
     }
 
@@ -86,6 +91,7 @@ impl Biome {
             Biome::MixedForest => "mixed woodland",
             Biome::Path => "worn forest path",
             Biome::BambooGrove => "bamboo grove",
+            Biome::Clearing => "clearing",
         }
     }
 }
@@ -111,7 +117,7 @@ impl Tile {
     pub fn new(tile_type: TileType, biome: Biome) -> Self {
         let walkable = !matches!(tile_type, TileType::Lake);
         let mut items = LocationItems::new();
-        
+
         // Spawn basic resources (Stones) everywhere except deep lake
         if !matches!(tile_type, TileType::Lake) {
             let mut rng = rand::thread_rng();
@@ -151,72 +157,81 @@ impl WorldMap {
     }
 
     fn generate_tile(row: usize, col: usize) -> Tile {
-        // Determine biome based on position
-        let biome = Self::determine_biome(row, col);
-        let tile_type = Self::determine_tile_type(row, col, biome);
+        // Convert grid index to world coordinates (origin at cabin)
+        let world_row = row as i32 - MAP_ORIGIN_ROW;
+        let world_col = col as i32 - MAP_ORIGIN_COL;
 
-        Tile::new(tile_type, biome)
+        // Determine biome based on position
+        let biome = Self::determine_biome(world_row, world_col);
+        let tile_type = Self::determine_tile_type(world_row, world_col, biome);
+
+        let mut tile = Tile::new(tile_type, biome);
+        if world_row.abs() == MAP_EXTENT || world_col.abs() == MAP_EXTENT {
+            tile.walkable = false; // Impassable border
+        }
+        tile
     }
 
-    fn determine_biome(row: usize, col: usize) -> Biome {
-        // Lake area: rows 1-5, cols 1-9
-        let is_lake_area = row >= 1 && row <= 5 && col >= 1 && col <= 9;
-        let bamboo_band = row >= 6 && row <= 7 && col >= 2 && col <= 4;
-
+    fn determine_biome(world_row: i32, world_col: i32) -> Biome {
+        // Lake core: rows -5..-1, cols -4..4 (north of cabin)
+        let is_lake_area = world_row >= -5 && world_row <= -1 && world_col >= -4 && world_col <= 4;
         if is_lake_area {
-            // Lake edges take on adjacent biome characteristics
-            if col <= 2 {
+            if world_col <= -3 {
                 return Biome::Oasis;
-            } else if col >= 8 {
-                return Biome::Lake; // Winter side of lake
+            }
+            if world_col >= 3 {
+                return Biome::Lake;
             }
             return Biome::Lake;
         }
 
-        if bamboo_band {
+        // Cabin clearing at (0,0) and adjacent (-1,-1)
+        if (world_row == 0 && world_col == 0) || (world_row == -1 && world_col == -1) {
+            return Biome::Clearing;
+        }
+
+        // Bamboo grove near lake south-west edge
+        if world_row >= 0 && world_row <= 1 && world_col >= -3 && world_col <= -1 {
             return Biome::BambooGrove;
         }
 
-        // West side - Desert
-        if col <= 1 {
+        // West side - Desert band
+        if world_col <= -5 {
             return Biome::Desert;
         }
 
         // East side - Winter
-        if col >= 9 {
+        if world_col >= 5 {
             return Biome::WinterForest;
         }
 
-        // North side (rows 0-2) - Spring/Autumn forest
-        if row <= 2 {
+        // North band (rows <= -4) - Spring/Autumn forest
+        if world_row <= -4 {
             return Biome::SpringForest;
         }
 
-        // Path and cabin area
-        if col == 5 && row >= 6 {
+        // Path south to start (col 0, rows 1..5)
+        if world_col == 0 && world_row >= 1 && world_row <= 5 {
             return Biome::Path;
         }
 
-        // Default - mixed forest
+        // Default south/mid - mixed forest
         Biome::MixedForest
     }
 
-    fn determine_tile_type(row: usize, col: usize, biome: Biome) -> TileType {
+    fn determine_tile_type(world_row: i32, world_col: i32, biome: Biome) -> TileType {
         // Lake tiles
-        if row >= 1 && row <= 5 && col >= 1 && col <= 9 {
-            // Not oasis edges
-            if !(col <= 2 && row >= 4) && !(col >= 8 && row >= 4) {
-                return TileType::Lake;
-            }
+        if world_row >= -5 && world_row <= -1 && world_col >= -4 && world_col <= 4 {
+            return TileType::Lake;
         }
 
         // Clearings for placed structures
-        if (row == 6 && col == 5) || (row == 5 && col == 4) {
+        if matches!(biome, Biome::Clearing) {
             return TileType::Clearing;
         }
 
-        // Path from start (10, 5) to cabin clearing
-        if col == 5 && row >= 7 && row <= 10 {
+        // Path from start (row 5, col 0) to cabin clearing
+        if world_col == 0 && world_row >= 1 && world_row <= 5 {
             return TileType::Path;
         }
 
@@ -233,15 +248,13 @@ impl WorldMap {
     }
 
     pub fn is_valid_position(&self, row: i32, col: i32) -> bool {
-        row >= 0 && col >= 0 &&
-        (row as usize) < MAP_HEIGHT &&
-        (col as usize) < MAP_WIDTH
+        let gr = row + MAP_ORIGIN_ROW;
+        let gc = col + MAP_ORIGIN_COL;
+        gr >= 0 && gc >= 0 && (gr as usize) < MAP_HEIGHT && (gc as usize) < MAP_WIDTH
     }
 
     pub fn is_walkable(&self, row: usize, col: usize) -> bool {
-        self.get_tile(row, col)
-            .map(|t| t.walkable)
-            .unwrap_or(false)
+        self.get_tile(row, col).map(|t| t.walkable).unwrap_or(false)
     }
 
     pub fn get_biome_at(&self, row: usize, col: usize) -> Option<Biome> {
@@ -250,16 +263,21 @@ impl WorldMap {
 
     /// Calculate which seasonal biome direction dominates at this position
     pub fn get_dominant_direction(&self, row: usize, col: usize) -> Direction {
-        let center_row = 5.5;
-        let center_col = 5.5;
-
-        let row_diff = row as f32 - center_row;
-        let col_diff = col as f32 - center_col;
+        let row_diff = row as i32 - MAP_ORIGIN_ROW;
+        let col_diff = col as i32 - MAP_ORIGIN_COL;
 
         if row_diff.abs() > col_diff.abs() {
-            if row_diff < 0.0 { Direction::North } else { Direction::South }
+            if row_diff < 0 {
+                Direction::North
+            } else {
+                Direction::South
+            }
         } else {
-            if col_diff < 0.0 { Direction::West } else { Direction::East }
+            if col_diff < 0 {
+                Direction::West
+            } else {
+                Direction::East
+            }
         }
     }
 }
@@ -296,14 +314,16 @@ impl Position {
     }
 
     pub fn is_valid(&self) -> bool {
-        self.row >= 0 && self.col >= 0 &&
-        (self.row as usize) < MAP_HEIGHT &&
-        (self.col as usize) < MAP_WIDTH
+        let gr = self.row + MAP_ORIGIN_ROW;
+        let gc = self.col + MAP_ORIGIN_COL;
+        gr >= 0 && gc >= 0 && (gr as usize) < MAP_HEIGHT && (gc as usize) < MAP_WIDTH
     }
 
     pub fn as_usize(&self) -> Option<(usize, usize)> {
         if self.is_valid() {
-            Some((self.row as usize, self.col as usize))
+            let gr = (self.row + MAP_ORIGIN_ROW) as usize;
+            let gc = (self.col + MAP_ORIGIN_COL) as usize;
+            Some((gr, gc))
         } else {
             None
         }

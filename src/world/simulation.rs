@@ -1,20 +1,25 @@
-use super::{WorldMap, WorldTime, RegionalWeather, Biome, TimeOfDay};
+use super::{Biome, RegionalWeather, TimeOfDay, WorldMap, WorldTime};
 
 /// Calculate the effective temperature at a position
 pub fn calculate_temperature(
     map: &WorldMap,
     weather: &RegionalWeather,
     time: &WorldTime,
-    row: usize,
-    col: usize,
+    pos: &super::map::Position,
     indoor: bool,
     fire_heat: f32,
 ) -> f32 {
+    let (row, col) = pos.as_usize().unwrap_or((
+        super::map::MAP_ORIGIN_ROW as usize,
+        super::map::MAP_ORIGIN_COL as usize,
+    ));
     let biome = map.get_biome_at(row, col).unwrap_or(Biome::MixedForest);
     let base_temp = biome.base_temperature();
 
     let time_mod = time.time_of_day().temperature_modifier();
-    let weather_mod = weather.get_for_position(row as i32, col as i32).temperature_modifier();
+    let weather_mod = weather
+        .get_for_position(pos.row, pos.col)
+        .temperature_modifier();
 
     let outdoor_temp = base_temp + time_mod + weather_mod;
 
@@ -28,7 +33,13 @@ pub fn calculate_temperature(
 }
 
 /// Describe the sky based on time and weather
-pub fn describe_sky(time: &WorldTime, weather: &RegionalWeather, row: i32, col: i32, biome: Biome) -> String {
+pub fn describe_sky(
+    time: &WorldTime,
+    weather: &RegionalWeather,
+    row: i32,
+    col: i32,
+    biome: Biome,
+) -> String {
     let tod = time.time_of_day();
     let current_weather = weather.get_for_position(row, col);
 
@@ -82,29 +93,37 @@ pub fn describe_sky(time: &WorldTime, weather: &RegionalWeather, row: i32, col: 
             description.push_str("Thick snow falls steadily, blanketing everything in white. ");
         }
         (_, weather::Weather::Blizzard) => {
-            description.push_str("A fierce blizzard howls, reducing visibility to almost nothing. ");
+            description
+                .push_str("A fierce blizzard howls, reducing visibility to almost nothing. ");
         }
         (_, weather::Weather::Sandstorm) => {
             description.push_str("A wall of sand obscures the sky, stinging any exposed skin. ");
         }
-        (_, weather::Weather::HeatWave) => {
-            match tod {
-                TimeOfDay::Evening | TimeOfDay::Night | TimeOfDay::Midnight => {
-                    description.push_str("Even after dark, the air hangs heavy with trapped heat that refuses to fade. ");
-                }
-                TimeOfDay::Dusk | TimeOfDay::Dawn => {
-                    description.push_str("Heat haze warps the horizon, even as the sun sits low in the sky. ");
-                }
-                _ => {
-                    description.push_str("The air shimmers with intense heat under a merciless sun. ");
-                }
+        (_, weather::Weather::HeatWave) => match tod {
+            TimeOfDay::Evening | TimeOfDay::Night | TimeOfDay::Midnight => {
+                description.push_str(
+                    "Even after dark, the air hangs heavy with trapped heat that refuses to fade. ",
+                );
             }
-        }
+            TimeOfDay::Dusk | TimeOfDay::Dawn => {
+                description
+                    .push_str("Heat haze warps the horizon, even as the sun sits low in the sky. ");
+            }
+            _ => {
+                description.push_str("The air shimmers with intense heat under a merciless sun. ");
+            }
+        },
     }
 
     // Special features based on biome
     match biome {
-        Biome::WinterForest if tod.aurora_visible() && matches!(current_weather, weather::Weather::Clear | weather::Weather::LightSnow) => {
+        Biome::WinterForest
+            if tod.aurora_visible()
+                && matches!(
+                    current_weather,
+                    weather::Weather::Clear | weather::Weather::LightSnow
+                ) =>
+        {
             description.push_str("Ethereal ribbons of green and purple light dance across the sky - the aurora borealis. ");
         }
         Biome::SpringForest if tod.sunrise_visible() => {

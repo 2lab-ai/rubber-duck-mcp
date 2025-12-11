@@ -1,7 +1,7 @@
-use rand::Rng;
-use crate::entity::{Player, Room, Item, Cabin, WoodShed, FireState, Tree, TreeType};
-use crate::world::{WorldMap, TileType};
+use crate::entity::{Cabin, FireState, Item, Player, Room, Tree, TreeType, WoodShed};
 use crate::persistence::GameState;
+use crate::world::{Position, TileType, WorldMap};
+use rand::Rng;
 
 pub enum CraftResult {
     Success(String),
@@ -42,7 +42,10 @@ pub fn use_item(
         }
         player.inventory.remove(&item, 1);
         cabin.add_table_item(item.clone());
-        return CraftResult::Success(format!("You place the {} carefully on the table.", item.name()));
+        return CraftResult::Success(format!(
+            "You place the {} carefully on the table.",
+            item.name()
+        ));
     }
 
     match (&item, target_str) {
@@ -100,12 +103,16 @@ pub fn use_item(
         }
 
         // Kettle: fill with water near the lake
-        (Item::Kettle, Some(t)) if t.contains("water") || t.contains("lake") || t.contains("fill") => {
+        (Item::Kettle, Some(t))
+            if t.contains("water") || t.contains("lake") || t.contains("fill") =>
+        {
             return try_fill_kettle(player, map);
         }
 
         // Heat water in the kettle
-        (Item::WaterKettle, Some(t)) if t.contains("fire") || t.contains("hearth") || t.contains("boil") => {
+        (Item::WaterKettle, Some(t))
+            if t.contains("fire") || t.contains("hearth") || t.contains("boil") =>
+        {
             return try_heat_kettle(player, cabin);
         }
         (Item::WaterKettle, None) if matches!(player.room, Some(Room::CabinMain)) => {
@@ -114,7 +121,10 @@ pub fn use_item(
 
         // Brew herbal tea
         (Item::WildHerbs, Some(t))
-            if t.contains("tea") || t.contains("water") || t.contains("kettle") || t.contains("cup") =>
+            if t.contains("tea")
+                || t.contains("water")
+                || t.contains("kettle")
+                || t.contains("cup") =>
         {
             return try_brew_herbal_tea(player, cabin);
         }
@@ -184,7 +194,9 @@ pub fn use_item(
         }
 
         // Book -> kindling (tearing pages)
-        (Item::OldBook, Some(t)) if t.contains("kindling") || t.contains("tinder") || t.contains("burn") => {
+        (Item::OldBook, Some(t))
+            if t.contains("kindling") || t.contains("tinder") || t.contains("burn") =>
+        {
             return try_book_to_kindling(player);
         }
 
@@ -210,7 +222,7 @@ pub fn use_item(
         (Item::TeaCup, None) => {
             if has_item {
                 return CraftResult::Failure(
-                    "The cup is empty. You'd need water and a fire to make tea.".to_string()
+                    "The cup is empty. You'd need water and a fire to make tea.".to_string(),
                 );
             }
         }
@@ -219,7 +231,7 @@ pub fn use_item(
         (Item::Kettle, None) => {
             if has_item {
                 return CraftResult::Failure(
-                    "The kettle is empty. Head to the lake to fill it with water.".to_string()
+                    "The kettle is empty. Head to the lake to fill it with water.".to_string(),
                 );
             }
         }
@@ -233,7 +245,8 @@ pub fn use_item(
                     );
                 }
                 return CraftResult::Failure(
-                    "The herbs smell fragrant. You'll need hot water and a cup to make tea.".to_string()
+                    "The herbs smell fragrant. You'll need hot water and a cup to make tea."
+                        .to_string(),
                 );
             }
         }
@@ -242,7 +255,8 @@ pub fn use_item(
         (Item::HotWaterKettle, None) => {
             if has_item {
                 return CraftResult::Failure(
-                    "The water is piping hot. Add herbs and pour it into a cup to make tea.".to_string()
+                    "The water is piping hot. Add herbs and pour it into a cup to make tea."
+                        .to_string(),
                 );
             }
         }
@@ -254,19 +268,16 @@ pub fn use_item(
         return CraftResult::Failure(format!("You don't have a {}.", item.name()));
     }
 
-    CraftResult::Failure(
-        format!("You're not sure how to use the {} {}.",
-            item.name(),
-            target.map(|t| format!("on '{}'", t)).unwrap_or_default()
-        )
-    )
+    CraftResult::Failure(format!(
+        "You're not sure how to use the {} {}.",
+        item.name(),
+        target.map(|t| format!("on '{}'", t)).unwrap_or_default()
+    ))
 }
 
 pub fn kick_tree(state: &mut GameState) -> CraftResult {
     if state.player.room.is_some() {
-        return CraftResult::Failure(
-            "You need to be outside near a tree to kick it.".to_string()
-        );
+        return CraftResult::Failure("You need to be outside near a tree to kick it.".to_string());
     }
 
     let Some(tree) = state.objects.find_tree_mut_at(&state.player.position) else {
@@ -303,21 +314,19 @@ fn try_chop(player: &mut Player, wood_shed: &mut WoodShed) -> CraftResult {
     // Must be in wood shed
     if !matches!(player.room, Some(Room::WoodShed)) {
         return CraftResult::Failure(
-            "You need to be at the chopping block to chop wood.".to_string()
+            "You need to be at the chopping block to chop wood.".to_string(),
         );
     }
 
     // Must have axe
     if !player.inventory.has(&Item::Axe, 1) {
-        return CraftResult::Failure(
-            "You need to be holding an axe to chop wood.".to_string()
-        );
+        return CraftResult::Failure("You need to be holding an axe to chop wood.".to_string());
     }
 
     // Must have log on block
     if !wood_shed.chopping_block.has_log {
         return CraftResult::Failure(
-            "There's no log on the chopping block. Place one first.".to_string()
+            "There's no log on the chopping block. Place one first.".to_string(),
         );
     }
 
@@ -365,43 +374,33 @@ fn try_chop(player: &mut Player, wood_shed: &mut WoodShed) -> CraftResult {
 /// Place a log on the chopping block
 fn try_place_log(player: &mut Player, wood_shed: &mut WoodShed) -> CraftResult {
     if !matches!(player.room, Some(Room::WoodShed)) {
-        return CraftResult::Failure(
-            "The chopping block is in the wood shed.".to_string()
-        );
+        return CraftResult::Failure("The chopping block is in the wood shed.".to_string());
     }
 
     if wood_shed.chopping_block.has_log {
-        return CraftResult::Failure(
-            "There's already a log on the chopping block.".to_string()
-        );
+        return CraftResult::Failure("There's already a log on the chopping block.".to_string());
     }
 
     if !player.inventory.has(&Item::Log, 1) {
-        return CraftResult::Failure(
-            "You don't have a log to place.".to_string()
-        );
+        return CraftResult::Failure("You don't have a log to place.".to_string());
     }
 
     player.inventory.remove(&Item::Log, 1);
     wood_shed.chopping_block.has_log = true;
 
     CraftResult::Success(
-        "You heave the heavy log onto the chopping block and position it carefully.".to_string()
+        "You heave the heavy log onto the chopping block and position it carefully.".to_string(),
     )
 }
 
 /// Light kindling with a match
 fn try_light_kindling(player: &mut Player, _cabin: &Cabin) -> CraftResult {
     if !player.inventory.has(&Item::Matchbox, 1) {
-        return CraftResult::Failure(
-            "You need a matchbox to light anything.".to_string()
-        );
+        return CraftResult::Failure("You need a matchbox to light anything.".to_string());
     }
 
     if !player.inventory.has(&Item::Kindling, 1) {
-        return CraftResult::Failure(
-            "You don't have any kindling to light.".to_string()
-        );
+        return CraftResult::Failure("You don't have any kindling to light.".to_string());
     }
 
     // Convert kindling to lit kindling
@@ -417,21 +416,19 @@ fn try_light_kindling(player: &mut Player, _cabin: &Cabin) -> CraftResult {
 fn try_start_fire(player: &mut Player, cabin: &mut Cabin) -> CraftResult {
     if !matches!(player.room, Some(Room::CabinMain)) {
         return CraftResult::Failure(
-            "You need to be by the fireplace to start a fire.".to_string()
+            "You need to be by the fireplace to start a fire.".to_string(),
         );
     }
 
     if !player.inventory.has(&Item::LitKindling, 1) {
-        return CraftResult::Failure(
-            "You need lit kindling to start a fire.".to_string()
-        );
+        return CraftResult::Failure("You need lit kindling to start a fire.".to_string());
     }
 
     player.inventory.remove(&Item::LitKindling, 1);
     if !cabin.fireplace.add_fuel_item(Item::LitKindling) {
         player.inventory.add(Item::LitKindling, 1);
         return CraftResult::Failure(
-            "The fireplace refuses to catch the burning kindling.".to_string()
+            "The fireplace refuses to catch the burning kindling.".to_string(),
         );
     }
 
@@ -439,22 +436,20 @@ fn try_start_fire(player: &mut Player, cabin: &mut Cabin) -> CraftResult {
         player,
         cabin,
         15.0,
-        "You set the burning kindling into the hearth and shelter it from drafts."
+        "You set the burning kindling into the hearth and shelter it from drafts.",
     )
 }
 
 fn try_light_fire_with_match(player: &mut Player, cabin: &mut Cabin) -> CraftResult {
     if !player.inventory.has(&Item::Matchbox, 1) {
-        return CraftResult::Failure(
-            "You need your matchbox to strike a flame.".to_string()
-        );
+        return CraftResult::Failure("You need your matchbox to strike a flame.".to_string());
     }
 
     attempt_light_fire(
         player,
         cabin,
         5.0,
-        "You strike a match and touch it to the prepared tinder."
+        "You strike a match and touch it to the prepared tinder.",
     )
 }
 
@@ -465,15 +460,11 @@ fn attempt_light_fire(
     action_line: &str,
 ) -> CraftResult {
     if !matches!(player.room, Some(Room::CabinMain)) {
-        return CraftResult::Failure(
-            "You need to be by the fireplace to do that.".to_string()
-        );
+        return CraftResult::Failure("You need to be by the fireplace to do that.".to_string());
     }
 
     if cabin.fireplace.state != FireState::Cold {
-        return CraftResult::Failure(
-            "The fire is already lit.".to_string()
-        );
+        return CraftResult::Failure("The fire is already lit.".to_string());
     }
 
     if cabin.fireplace.fuel < 5.0 {
@@ -501,44 +492,41 @@ fn attempt_light_fire(
             player.skills.improve("fire_making", 1);
         }
 
-        CraftResult::Success(
-            format!("{} The tinder catches and the larger fuel begins to smolder.", action_line)
-        )
+        CraftResult::Success(format!(
+            "{} The tinder catches and the larger fuel begins to smolder.",
+            action_line
+        ))
     } else {
         cabin.fireplace.clear_tinder();
         cabin.fireplace.fuel = (cabin.fireplace.fuel - 2.0).max(0.0);
 
         CraftResult::PartialSuccess(
-            "The flames gasp and die before the larger fuel takes. Add fresh tinder and try again.".to_string()
+            "The flames gasp and die before the larger fuel takes. Add fresh tinder and try again."
+                .to_string(),
         )
     }
 }
 
 fn try_add_fuel_item(player: &mut Player, cabin: &mut Cabin, item: Item) -> CraftResult {
     if !matches!(player.room, Some(Room::CabinMain)) {
-        return CraftResult::Failure(
-            "You need to be by the fireplace.".to_string()
-        );
+        return CraftResult::Failure("You need to be by the fireplace.".to_string());
     }
 
     if !item.is_flammable() {
-        return CraftResult::Failure(
-            format!("The {} won't help the fire.", item.name())
-        );
+        return CraftResult::Failure(format!("The {} won't help the fire.", item.name()));
     }
 
     if !player.inventory.has(&item, 1) {
-        return CraftResult::Failure(
-            format!("You don't have any {} to add.", item.name())
-        );
+        return CraftResult::Failure(format!("You don't have any {} to add.", item.name()));
     }
 
     player.inventory.remove(&item, 1);
     if !cabin.fireplace.add_fuel_item(item) {
         player.inventory.add(item, 1);
-        return CraftResult::Failure(
-            format!("The {} refuses to catch in the fireplace.", item.name())
-        );
+        return CraftResult::Failure(format!(
+            "The {} refuses to catch in the fireplace.",
+            item.name()
+        ));
     }
 
     let mut msg = if cabin.fireplace.state == FireState::Cold {
@@ -592,7 +580,8 @@ fn try_book_to_kindling(player: &mut Player) -> CraftResult {
 
 /// Find a nearby standing tree
 fn find_near_tree<'a>(player: &Player, trees: &'a mut [Tree]) -> Option<&'a mut Tree> {
-    trees.iter_mut()
+    trees
+        .iter_mut()
         .find(|t| !t.felled && player.position.distance_to(&t.position) <= 1.5)
 }
 
@@ -622,7 +611,10 @@ fn collect_fruit_drop(
     if caught > 0 {
         Some(format!("A {} drops and you grab it.", item.name()))
     } else {
-        Some(format!("A {} thuds to the ground. You can pick it up later.", item.name()))
+        Some(format!(
+            "A {} thuds to the ground. You can pick it up later.",
+            item.name()
+        ))
     }
 }
 
@@ -641,7 +633,9 @@ fn try_chop_tree(
     // Make sure there is a tree nearby
     let tree = match find_near_tree(player, trees) {
         Some(t) => t,
-        None => return CraftResult::Failure("You don't see a tree close enough to chop.".to_string()),
+        None => {
+            return CraftResult::Failure("You don't see a tree close enough to chop.".to_string())
+        }
     };
 
     // Guard against non-walkable tiles (just in case)
@@ -709,14 +703,7 @@ fn try_chop_tree(
                 rng.gen_range(1..=2),
                 rng.gen_range(1..=3),
             ),
-            TreeType::Bamboo => (
-                0,
-                0,
-                0,
-                0,
-                rng.gen_range(1..=2),
-                rng.gen_range(1..=2),
-            ),
+            TreeType::Bamboo => (0, 0, 0, 0, rng.gen_range(1..=2), rng.gen_range(1..=2)),
         };
 
         let mut carried = Vec::new();
@@ -756,12 +743,24 @@ fn try_chop_tree(
             }
         };
 
-        if logs > 0 { add_or_stash(Item::Log, logs); }
-        if kindling > 0 { add_or_stash(Item::Kindling, kindling); }
-        if pinecones > 0 { add_or_stash(Item::Pinecone, pinecones); }
-        if apples > 0 { add_or_stash(Item::Apple, apples); }
-        if bark > 0 { add_or_stash(Item::Bark, bark); }
-        if leaves > 0 { add_or_stash(Item::DryLeaves, leaves); }
+        if logs > 0 {
+            add_or_stash(Item::Log, logs);
+        }
+        if kindling > 0 {
+            add_or_stash(Item::Kindling, kindling);
+        }
+        if pinecones > 0 {
+            add_or_stash(Item::Pinecone, pinecones);
+        }
+        if apples > 0 {
+            add_or_stash(Item::Apple, apples);
+        }
+        if bark > 0 {
+            add_or_stash(Item::Bark, bark);
+        }
+        if leaves > 0 {
+            add_or_stash(Item::DryLeaves, leaves);
+        }
         if let Some(item) = tree.fruit_item() {
             felled_fruit = tree.take_all_fruit() as u32;
             if felled_fruit > 0 {
@@ -771,7 +770,9 @@ fn try_chop_tree(
 
         if matches!(tree.kind, TreeType::Bamboo) {
             add_or_stash(Item::Bamboo, rng.gen_range(2..=4));
-            return CraftResult::Success("With a final swing, the bamboo stalks topple.".to_string());
+            return CraftResult::Success(
+                "With a final swing, the bamboo stalks topple.".to_string(),
+            );
         }
 
         let mut summary = format!(
@@ -825,16 +826,18 @@ fn try_chop_tree(
 
 /// Check if the player is adjacent to water they can fill the kettle from
 fn is_near_water(player: &Player, map: &WorldMap) -> bool {
-    if let Some((row, col)) = player.position.as_usize() {
-        for dr in -1..=1 {
-            for dc in -1..=1 {
-                let nr = row as i32 + dr;
-                let nc = col as i32 + dc;
-                if map.is_valid_position(nr, nc) {
-                    if let Some(tile) = map.get_tile(nr as usize, nc as usize) {
-                        if matches!(tile.tile_type, TileType::Lake) {
-                            return true;
-                        }
+    let pr = player.position.row;
+    let pc = player.position.col;
+    for dr in -1..=1 {
+        for dc in -1..=1 {
+            let pos = Position::new(pr + dr, pc + dc);
+            if !pos.is_valid() {
+                continue;
+            }
+            if let Some((r, c)) = pos.as_usize() {
+                if let Some(tile) = map.get_tile(r, c) {
+                    if matches!(tile.tile_type, TileType::Lake) {
+                        return true;
                     }
                 }
             }
@@ -851,20 +854,20 @@ fn try_fill_kettle(player: &mut Player, map: &WorldMap) -> CraftResult {
 
     if player.is_indoor() {
         return CraftResult::Failure(
-            "You'll need to step outside or onto the terrace to fetch water.".to_string()
+            "You'll need to step outside or onto the terrace to fetch water.".to_string(),
         );
     }
 
     if !is_near_water(player, map) {
         return CraftResult::Failure(
-            "You need to be right by the lake to fill the kettle.".to_string()
+            "You need to be right by the lake to fill the kettle.".to_string(),
         );
     }
 
     let extra_weight = Item::WaterKettle.weight() - Item::Kettle.weight();
     if player.inventory.current_weight() + extra_weight > player.inventory.max_weight {
         return CraftResult::Failure(
-            "A kettle full of water would be too heavy for you to carry right now.".to_string()
+            "A kettle full of water would be too heavy for you to carry right now.".to_string(),
         );
     }
 
@@ -879,20 +882,18 @@ fn try_fill_kettle(player: &mut Player, map: &WorldMap) -> CraftResult {
 /// Heat a kettle of water over the fireplace
 fn try_heat_kettle(player: &mut Player, cabin: &Cabin) -> CraftResult {
     if !player.inventory.has(&Item::WaterKettle, 1) {
-        return CraftResult::Failure(
-            "You need a kettle filled with water first.".to_string()
-        );
+        return CraftResult::Failure("You need a kettle filled with water first.".to_string());
     }
 
     if !matches!(player.room, Some(Room::CabinMain)) {
         return CraftResult::Failure(
-            "You need to set the kettle by the fireplace in the cabin.".to_string()
+            "You need to set the kettle by the fireplace in the cabin.".to_string(),
         );
     }
 
     if cabin.fireplace.state == FireState::Cold {
         return CraftResult::Failure(
-            "The hearth is cold. Get a fire going before trying to boil water.".to_string()
+            "The hearth is cold. Get a fire going before trying to boil water.".to_string(),
         );
     }
 
@@ -908,31 +909,27 @@ fn try_heat_kettle(player: &mut Player, cabin: &Cabin) -> CraftResult {
 fn try_brew_herbal_tea(player: &mut Player, _cabin: &Cabin) -> CraftResult {
     if !matches!(player.room, Some(Room::CabinMain)) {
         return CraftResult::Failure(
-            "Find a steady spot by the cabin hearth to brew your tea.".to_string()
+            "Find a steady spot by the cabin hearth to brew your tea.".to_string(),
         );
     }
 
     if !player.inventory.has(&Item::HotWaterKettle, 1) {
         if player.inventory.has(&Item::WaterKettle, 1) {
             return CraftResult::Failure(
-                "The water is still cold. Warm the kettle by the fire first.".to_string()
+                "The water is still cold. Warm the kettle by the fire first.".to_string(),
             );
         }
         return CraftResult::Failure(
-            "You need a kettle of hot water to steep the herbs.".to_string()
+            "You need a kettle of hot water to steep the herbs.".to_string(),
         );
     }
 
     if !player.inventory.has(&Item::TeaCup, 1) {
-        return CraftResult::Failure(
-            "You'll need a cup ready to pour the tea into.".to_string()
-        );
+        return CraftResult::Failure("You'll need a cup ready to pour the tea into.".to_string());
     }
 
     if !player.inventory.has(&Item::WildHerbs, 1) {
-        return CraftResult::Failure(
-            "You don't have any wild herbs to steep.".to_string()
-        );
+        return CraftResult::Failure("You don't have any wild herbs to steep.".to_string());
     }
 
     player.inventory.remove(&Item::HotWaterKettle, 1);

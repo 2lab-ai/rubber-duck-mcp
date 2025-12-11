@@ -1,14 +1,14 @@
-use std::io::{BufRead, Write};
-use serde_json::{json, Value};
 use anyhow::Result;
+use serde_json::{json, Value};
+use std::io::{BufRead, Write};
 
 use super::protocol::*;
 use super::tools::*;
-use crate::world::*;
-use crate::entity::*;
 use crate::actions::*;
 use crate::descriptions::*;
+use crate::entity::*;
 use crate::persistence::*;
+use crate::world::*;
 
 pub struct McpServer {
     world: World,
@@ -89,7 +89,9 @@ impl McpServer {
         let result = InitializeResult {
             protocol_version: "2024-11-05".to_string(),
             capabilities: ServerCapabilities {
-                tools: Some(ToolsCapability { list_changed: false }),
+                tools: Some(ToolsCapability {
+                    list_changed: false,
+                }),
             },
             server_info: ServerInfo {
                 name: "rubber-duck-mcp".to_string(),
@@ -107,12 +109,14 @@ impl McpServer {
     }
 
     fn handle_tools_call(&mut self, id: Option<Value>, params: Option<Value>) -> JsonRpcResponse {
-        let call_params: CallToolParams = match params
-            .and_then(|p| serde_json::from_value(p).ok())
+        let call_params: CallToolParams = match params.and_then(|p| serde_json::from_value(p).ok())
         {
             Some(p) => p,
             None => {
-                return JsonRpcResponse::error(id, JsonRpcError::invalid_params("Missing tool parameters"));
+                return JsonRpcResponse::error(
+                    id,
+                    JsonRpcError::invalid_params("Missing tool parameters"),
+                );
             }
         };
 
@@ -159,7 +163,12 @@ impl McpServer {
 
     fn append_pending_messages(&mut self, mut result: CallToolResult) -> CallToolResult {
         if !self.world.state.pending_messages.is_empty() {
-            let messages = self.world.state.pending_messages.drain(..).collect::<Vec<_>>();
+            let messages = self
+                .world
+                .state
+                .pending_messages
+                .drain(..)
+                .collect::<Vec<_>>();
             if let Some(ToolContent::Text { text }) = result.content.first_mut() {
                 let notifications = messages.join("\n");
                 *text = format!("{}\n\n**[{}]**", text, notifications);
@@ -169,16 +178,18 @@ impl McpServer {
     }
 
     fn is_near_water(&self) -> bool {
-        if let Some((row, col)) = self.world.state.player.position.as_usize() {
-            for dr in -1..=1 {
-                for dc in -1..=1 {
-                    let nr = row as i32 + dr;
-                    let nc = col as i32 + dc;
-                    if self.world.map.is_valid_position(nr, nc) {
-                        if let Some(tile) = self.world.map.get_tile(nr as usize, nc as usize) {
-                            if matches!(tile.tile_type, TileType::Lake) {
-                                return true;
-                            }
+        let pr = self.world.state.player.position.row;
+        let pc = self.world.state.player.position.col;
+        for dr in -1..=1 {
+            for dc in -1..=1 {
+                let pos = Position::new(pr + dr, pc + dc);
+                if !pos.is_valid() {
+                    continue;
+                }
+                if let Some((r, c)) = pos.as_usize() {
+                    if let Some(tile) = self.world.map.get_tile(r, c) {
+                        if matches!(tile.tile_type, TileType::Lake) {
+                            return true;
                         }
                     }
                 }
@@ -223,12 +234,16 @@ impl McpServer {
     fn cmd_move(&mut self, args: &Option<Value>) -> CallToolResult {
         let dir_str = match get_string_arg(args, "direction") {
             Some(d) => d,
-            None => return CallToolResult::error("Please specify a direction to move.".to_string()),
+            None => {
+                return CallToolResult::error("Please specify a direction to move.".to_string())
+            }
         };
 
         let dir = match Direction::from_str(&dir_str) {
             Some(d) => d,
-            None => return CallToolResult::error(format!("'{}' is not a valid direction.", dir_str)),
+            None => {
+                return CallToolResult::error(format!("'{}' is not a valid direction.", dir_str))
+            }
         };
 
         let cabin_open = self
@@ -282,7 +297,9 @@ impl McpServer {
     fn cmd_enter(&mut self, args: &Option<Value>) -> CallToolResult {
         let location = match get_string_arg(args, "location") {
             Some(l) => l,
-            None => return CallToolResult::error("Please specify a location to enter.".to_string()),
+            None => {
+                return CallToolResult::error("Please specify a location to enter.".to_string())
+            }
         };
 
         let cabin_open = self
@@ -345,10 +362,7 @@ impl McpServer {
             None => return CallToolResult::error("Please specify what to examine.".to_string()),
         };
 
-        let text = examine(
-            &target,
-            &self.world.state,
-        );
+        let text = examine(&target, &self.world.state);
 
         CallToolResult::text(text)
     }
@@ -412,14 +426,22 @@ impl McpServer {
             InteractionResult::Failure(msg) => CallToolResult::text(msg),
             InteractionResult::ItemObtained(_, msg) => CallToolResult::text(msg),
             InteractionResult::ItemLost(_, msg) => CallToolResult::text(msg),
-            InteractionResult::ActionSuccess { message, time_cost, energy_cost } => {
+            InteractionResult::ActionSuccess {
+                message,
+                time_cost,
+                energy_cost,
+            } => {
                 // Pass time and drain energy
                 for _ in 0..time_cost {
                     self.world.tick();
                 }
                 self.world.state.player.modify_energy(-energy_cost);
-                
-                let time_str = if time_cost > 0 { format!(" (took {} mins)", time_cost * 10) } else { "".to_string() };
+
+                let time_str = if time_cost > 0 {
+                    format!(" (took {} mins)", time_cost * 10)
+                } else {
+                    "".to_string()
+                };
                 CallToolResult::text(format!("{}{}", message, time_str))
             }
         }
@@ -443,11 +465,19 @@ impl McpServer {
     fn cmd_write(&mut self, args: &Option<Value>) -> CallToolResult {
         let text = match get_string_arg(args, "text") {
             Some(t) => t,
-            None => return CallToolResult::error("Please provide text to write (제목: or 페이지N:).".to_string()),
+            None => {
+                return CallToolResult::error(
+                    "Please provide text to write (제목: or 페이지N:).".to_string(),
+                )
+            }
         };
         let target = match get_string_arg(args, "target") {
             Some(t) => t,
-            None => return CallToolResult::error("Please specify a target book (e.g., '빈 책' or 'book-1').".to_string()),
+            None => {
+                return CallToolResult::error(
+                    "Please specify a target book (e.g., '빈 책' or 'book-1').".to_string(),
+                )
+            }
         };
 
         let result = write_on_book(&text, &target, &mut self.world.state);
@@ -455,12 +485,20 @@ impl McpServer {
         match result {
             InteractionResult::Success(msg) => CallToolResult::text(msg),
             InteractionResult::Failure(msg) => CallToolResult::text(msg),
-            InteractionResult::ActionSuccess { message, time_cost, energy_cost } => {
+            InteractionResult::ActionSuccess {
+                message,
+                time_cost,
+                energy_cost,
+            } => {
                 for _ in 0..time_cost {
                     self.world.tick();
                 }
                 self.world.state.player.modify_energy(-energy_cost);
-                let time_str = if time_cost > 0 { format!(" (took {} mins)", time_cost * 10) } else { "".to_string() };
+                let time_str = if time_cost > 0 {
+                    format!(" (took {} mins)", time_cost * 10)
+                } else {
+                    "".to_string()
+                };
                 CallToolResult::text(format!("{}{}", message, time_str))
             }
             _ => CallToolResult::error("Unexpected result".to_string()),
@@ -516,10 +554,13 @@ impl McpServer {
                 text.push_str(&format!("- {} (x{})\n", item.name(), qty));
             }
         }
-        
+
         // Show active project if any
         if let Some(bp) = &self.world.state.player.active_project {
-            text.push_str(&format!("\n**Active Project:**\n- {}\n", bp.status_description()));
+            text.push_str(&format!(
+                "\n**Active Project:**\n- {}\n",
+                bp.status_description()
+            ));
         }
 
         if !self.world.state.player.book_ids.is_empty() {
@@ -553,11 +594,16 @@ impl McpServer {
             Hydration: {:.0}/100 ({})\n\n\
             {}",
             player.health,
-            player.warmth, player.comfort_description(),
-            player.energy, player.energy_description(),
-            player.mood, player.mood_description(),
-            player.fullness, player.fullness_description(),
-            player.hydration, player.hydration_description(),
+            player.warmth,
+            player.comfort_description(),
+            player.energy,
+            player.energy_description(),
+            player.mood,
+            player.mood_description(),
+            player.fullness,
+            player.fullness_description(),
+            player.hydration,
+            player.hydration_description(),
             player.status_summary()
         );
 
@@ -569,29 +615,34 @@ impl McpServer {
         let room = self.world.state.player.room.clone();
 
         let near_water = self.is_near_water();
-        let cozy_fire = matches!(room, Some(Room::CabinMain)) &&
-            self.world
+        let cozy_fire = matches!(room, Some(Room::CabinMain))
+            && self
+                .world
                 .state
                 .cabin_state()
                 .map(|c| !matches!(c.fireplace.state, FireState::Cold))
                 .unwrap_or(false);
 
         let (row, col) = position.as_usize().unwrap_or((5, 5));
-        let biome = self.world.map.get_biome_at(row, col).unwrap_or(Biome::MixedForest);
+        let biome = self
+            .world
+            .map
+            .get_biome_at(row, col)
+            .unwrap_or(Biome::MixedForest);
 
         let setting = match room {
-            Some(Room::CabinMain) if cozy_fire =>
-                "You settle near the fireplace, letting its warmth seep into your hands.",
-            Some(Room::CabinMain) =>
-                "You find a quiet corner of the cabin and close your eyes.",
-            Some(Room::CabinTerrace) =>
-                "You rest on the terrace rail, eyes drifting over the lake's surface.",
-            Some(Room::WoodShed) =>
-                "You lean against the shed wall, breathing in the scent of cut wood.",
-            None if near_water =>
-                "You sit by the water's edge, watching ripples form and fade.",
-            None =>
-                "You find a soft patch of ground and sit cross-legged, grounding yourself.",
+            Some(Room::CabinMain) if cozy_fire => {
+                "You settle near the fireplace, letting its warmth seep into your hands."
+            }
+            Some(Room::CabinMain) => "You find a quiet corner of the cabin and close your eyes.",
+            Some(Room::CabinTerrace) => {
+                "You rest on the terrace rail, eyes drifting over the lake's surface."
+            }
+            Some(Room::WoodShed) => {
+                "You lean against the shed wall, breathing in the scent of cut wood."
+            }
+            None if near_water => "You sit by the water's edge, watching ripples form and fade.",
+            None => "You find a soft patch of ground and sit cross-legged, grounding yourself.",
         };
 
         // Let a little time pass while meditating
@@ -653,7 +704,9 @@ You feel calmer and a bit more refreshed. It is now {}.",
     fn cmd_drink(&mut self, _args: &Option<Value>) -> CallToolResult {
         let near_water = self.is_near_water();
         if !near_water {
-            return CallToolResult::error("You need to be right by the lake to drink the water.".to_string());
+            return CallToolResult::error(
+                "You need to be right by the lake to drink the water.".to_string(),
+            );
         }
 
         self.world.state.player.modify_hydration(30.0);
@@ -697,10 +750,7 @@ You feel calmer and a bit more refreshed. It is now {}.",
             "You doze for a while. It's not the most comfortable rest, but it helps a bit."
         };
 
-        CallToolResult::text(format!(
-            "{}\n\nYou wake feeling more rested.",
-            text
-        ))
+        CallToolResult::text(format!("{}\n\nYou wake feeling more rested.", text))
     }
 
     fn cmd_wait(&mut self, args: &Option<Value>) -> CallToolResult {
@@ -721,7 +771,11 @@ You feel calmer and a bit more refreshed. It is now {}.",
 
         // Get a random wildlife description if any nearby
         let mut wildlife_note = String::new();
-        let nearby: Vec<_> = self.world.state.wildlife.iter()
+        let nearby: Vec<_> = self
+            .world
+            .state
+            .wildlife
+            .iter()
             .filter(|w| w.position.distance_to(&self.world.state.player.position) < 4.0)
             .collect();
 
@@ -742,9 +796,7 @@ You feel calmer and a bit more refreshed. It is now {}.",
     }
 
     fn cmd_kick(&mut self, _args: &Option<Value>) -> CallToolResult {
-        let result = kick_tree(
-            &mut self.world.state,
-        );
+        let result = kick_tree(&mut self.world.state);
 
         let text = match result {
             CraftResult::Success(msg) => msg,
@@ -758,11 +810,7 @@ You feel calmer and a bit more refreshed. It is now {}.",
     fn cmd_talk(&mut self, args: &Option<Value>) -> CallToolResult {
         let message = get_string_arg(args, "message");
         let duck_name = self.world.state.display_name(&Item::RubberDuck);
-        let result = talk_to_rubber_duck(
-            message.as_deref(),
-            &self.world.state,
-            &duck_name,
-        );
+        let result = talk_to_rubber_duck(message.as_deref(), &self.world.state, &duck_name);
 
         let text = match result {
             InteractionResult::Success(msg) => msg,
@@ -791,7 +839,9 @@ You feel calmer and a bit more refreshed. It is now {}.",
         };
 
         if !self.world.state.player_can_access_item(&item) {
-            return CallToolResult::error("You need to have or be next to that item to name it.".to_string());
+            return CallToolResult::error(
+                "You need to have or be next to that item to name it.".to_string(),
+            );
         }
 
         self.world.state.set_custom_name(item, &new_name);

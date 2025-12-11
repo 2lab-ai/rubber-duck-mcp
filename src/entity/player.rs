@@ -1,8 +1,8 @@
-use std::collections::HashMap;
-use serde::{Deserialize, Serialize};
-use crate::world::{Position, Direction};
-use super::objects::Item;
 use super::blueprint::Blueprint;
+use super::objects::Item;
+use crate::world::{Direction, Position};
+use serde::{Deserialize, Serialize};
+use std::collections::HashMap;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct SkillProgress {
@@ -29,18 +29,18 @@ const SKILL_IDS: &[&str] = &[
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Skills {
-    pub woodcutting: u8,   // 1-100
-    pub fire_making: u8,   // 1-100
-    pub observation: u8,   // 1-100
-    pub foraging: u8,      // 1-100
+    pub woodcutting: u8, // 1-100
+    pub fire_making: u8, // 1-100
+    pub observation: u8, // 1-100
+    pub foraging: u8,    // 1-100
     #[serde(default)]
-    pub stonemasonry: u8,  // 1-100
+    pub stonemasonry: u8, // 1-100
     #[serde(default)]
-    pub survival: u8,      // 1-100
+    pub survival: u8, // 1-100
     #[serde(default)]
-    pub tailoring: u8,     // 1-100
+    pub tailoring: u8, // 1-100
     #[serde(default)]
-    pub cooking: u8,       // 1-100
+    pub cooking: u8, // 1-100
     #[serde(default)]
     pub progress: HashMap<String, SkillProgress>,
 }
@@ -101,12 +101,18 @@ impl Skills {
             return None;
         }
         let seed_level = self.field_level(skill);
-        Some(self.progress.entry(skill.to_string()).or_insert_with(|| SkillProgress::new(seed_level)))
+        Some(
+            self.progress
+                .entry(skill.to_string())
+                .or_insert_with(|| SkillProgress::new(seed_level)),
+        )
     }
 
     pub fn improve(&mut self, skill: &str, amount: u8) {
         let Some(level_after) = ({
-            let Some(progress) = self.progress_entry(skill) else { return; };
+            let Some(progress) = self.progress_entry(skill) else {
+                return;
+            };
             progress.xp = progress.xp.saturating_add(amount as u32);
             while progress.xp >= Self::xp_to_next(progress.level) && progress.level < 100 {
                 progress.xp -= Self::xp_to_next(progress.level);
@@ -178,7 +184,8 @@ impl Inventory {
     }
 
     pub fn current_weight(&self) -> f32 {
-        self.slots.iter()
+        self.slots
+            .iter()
             .map(|slot| slot.item.weight() * slot.quantity as f32)
             .sum()
     }
@@ -215,21 +222,24 @@ impl Inventory {
     }
 
     pub fn has(&self, item: &Item, quantity: u32) -> bool {
-        self.slots.iter()
+        self.slots
+            .iter()
             .find(|s| &s.item == item)
             .map(|s| s.quantity >= quantity)
             .unwrap_or(false)
     }
 
     pub fn count(&self, item: &Item) -> u32 {
-        self.slots.iter()
+        self.slots
+            .iter()
             .find(|s| &s.item == item)
             .map(|s| s.quantity)
             .unwrap_or(0)
     }
 
     pub fn list(&self) -> Vec<(Item, u32)> {
-        self.slots.iter()
+        self.slots
+            .iter()
             .map(|s| (s.item.clone(), s.quantity))
             .collect()
     }
@@ -249,19 +259,19 @@ pub struct Player {
     pub room: Option<Room>,
 
     // Stats
-    pub health: f32,      // 0-100
-    pub warmth: f32,      // 0-100 (50 = comfortable)
-    pub energy: f32,      // 0-100
-    pub mood: f32,        // 0-100
+    pub health: f32, // 0-100
+    pub warmth: f32, // 0-100 (50 = comfortable)
+    pub energy: f32, // 0-100
+    pub mood: f32,   // 0-100
     #[serde(default = "Player::default_fullness")]
-    pub fullness: f32,    // 0-100 (hunger)
+    pub fullness: f32, // 0-100 (hunger)
     #[serde(default = "Player::default_hydration")]
-    pub hydration: f32,   // 0-100 (thirst)
+    pub hydration: f32, // 0-100 (thirst)
 
     // Progression
     pub skills: Skills,
     pub inventory: Inventory,
-    
+
     // Crafting
     #[serde(default)]
     pub active_project: Option<Blueprint>,
@@ -274,7 +284,7 @@ pub struct Player {
 impl Player {
     pub fn new() -> Self {
         Self {
-            position: Position::new(10, 5), // Start position
+            position: Position::new(5, 0), // Start south of cabin on the path
             facing: Direction::North,
             room: None,
 
@@ -401,8 +411,12 @@ impl Player {
         )
     }
 
-    fn default_fullness() -> f32 { 70.0 }
-    fn default_hydration() -> f32 { 70.0 }
+    fn default_fullness() -> f32 {
+        70.0
+    }
+    fn default_hydration() -> f32 {
+        70.0
+    }
 }
 
 impl Default for Player {

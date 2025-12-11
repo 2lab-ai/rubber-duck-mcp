@@ -44,7 +44,14 @@ cargo build --release
 
 ## Usage
 
-### As an MCP Server
+### Quick MCP add (Claude / Gemini)
+
+- Claude: `claude mcp add rubber-duck npx @2lab.ai/rubber-duck-mcp`
+- Gemini: `gemini mcp add rubber-duck npx @2lab.ai/rubber-duck-mcp`
+
+After adding, tell your AI something like: “Use the `rubber-duck` MCP server freely to explore and play.”
+
+### As an MCP Server (manual config)
 
 Add to your Claude Desktop configuration (`~/.claude/settings.json` or similar):
 
@@ -60,6 +67,20 @@ Add to your Claude Desktop configuration (`~/.claude/settings.json` or similar):
   }
 }
 ```
+
+### Direct run (not needed for normal use)
+
+Running `npx @2lab.ai/rubber-duck-mcp` directly will start the server and print logs like:
+
+```
+2025-12-11T05:56:30.033104Z  INFO Rubber Duck MCP Server v0.1.7
+2025-12-11T05:56:30.033120Z  INFO A text-based healing nature simulation
+2025-12-11T05:56:30.033160Z  INFO State file: ".../data/world_state.json"
+2025-12-11T05:56:30.033284Z  INFO Web view available at http://localhost:8080
+2025-12-11T05:56:30.033297Z  INFO MCP Server starting...
+```
+
+But typical usage is to **let your AI run it via MCP**. Just add it with the MCP command (above) and tell the AI: “Use the `rubber-duck` MCP server freely.” No need to start it yourself.
 
 ### Available Tools
 

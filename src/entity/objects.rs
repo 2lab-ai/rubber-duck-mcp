@@ -4,28 +4,28 @@ use serde::{Deserialize, Serialize};
 pub enum Item {
     // Tools
     Axe,
-    StoneAxe,      // Crafted axe
-    Knife,         // Factory knife
-    StoneKnife,    // Crafted knife
+    StoneAxe,   // Crafted axe
+    Knife,      // Factory knife
+    StoneKnife, // Crafted knife
     Matchbox,
     FishingRod,
 
     // Resources
-    Log,           // Unsplit log
-    Stick,         // Basic wood
-    Firewood,      // Split firewood
-    Kindling,      // Fire starter
-    LitKindling,   // Burning kindling
-    Charcoal,      // From burnt wood
-    Ash,           // Final residue
+    Log,         // Unsplit log
+    Stick,       // Basic wood
+    Firewood,    // Split firewood
+    Kindling,    // Fire starter
+    LitKindling, // Burning kindling
+    Charcoal,    // From burnt wood
+    Ash,         // Final residue
 
     // Crafting Materials
     Stone,
-    SharpStone,    // Knapped stone
-    PlantFiber,    // From bushes/grass
-    Cordage,       // Rope from fiber
-    Sap,           // Tree resin
-    
+    SharpStone, // Knapped stone
+    PlantFiber, // From bushes/grass
+    Cordage,    // Rope from fiber
+    Sap,        // Tree resin
+
     // Found items
     Pinecone,
     Mushroom,
@@ -34,15 +34,15 @@ pub enum Item {
     Driftwood,
     Bark,
     DryLeaves,
-    WildHerbs,     // For tea
-    Apple,         // Fruit from nearby trees
-    Date,          // From oasis
-    Bamboo,        // From bamboo grove
-    Paper,         // Crafted from bamboo
-    BlankBook,     // Unbound/writable book
-    Book,          // Written book
-    TutorialBook,  // Tutorial copy
-    DeathNote,     // Spooky notebook
+    WildHerbs,    // For tea
+    Apple,        // Fruit from nearby trees
+    Date,         // From oasis
+    Bamboo,       // From bamboo grove
+    Paper,        // Crafted from bamboo
+    BlankBook,    // Unbound/writable book
+    Book,         // Written book
+    TutorialBook, // Tutorial copy
+    DeathNote,    // Spooky notebook
 
     // Structures / Placeables (as items for blueprint targets)
     Campfire,
@@ -53,10 +53,10 @@ pub enum Item {
     AncientMap,
     TeaCup,
     WoolBlanket,
-    Kettle,        // For boiling water
-    WaterKettle,   // Kettle with water
+    Kettle,         // For boiling water
+    WaterKettle,    // Kettle with water
     HotWaterKettle, // Kettle with boiling water
-    HerbalTea,     // Finished tea!
+    HerbalTea,      // Finished tea!
     RubberDuck,
 }
 
@@ -203,7 +203,12 @@ impl Item {
             Item::WoolBlanket => &["blanket", "warm blanket", "wool blanket"],
             Item::Kettle => &["copper kettle", "empty kettle"],
             Item::WaterKettle => &["water kettle", "kettle with water", "filled kettle"],
-            Item::HotWaterKettle => &["hot water", "hot kettle", "hot water kettle", "boiling water"],
+            Item::HotWaterKettle => &[
+                "hot water",
+                "hot kettle",
+                "hot water kettle",
+                "boiling water",
+            ],
             Item::HerbalTea => &["tea", "herbal tea", "cup of tea"],
             Item::RubberDuck => &["duck", "yellow duck", "rubber ducky", "sage"],
         }
@@ -544,7 +549,10 @@ impl Cabin {
     }
 
     pub fn table_item_names(&self) -> Vec<String> {
-        self.table_items.iter().map(|i| i.name().to_string()).collect()
+        self.table_items
+            .iter()
+            .map(|i| i.name().to_string())
+            .collect()
     }
 }
 

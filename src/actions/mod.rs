@@ -1,7 +1,7 @@
-pub mod movement;
-pub mod interaction;
 pub mod crafting;
+pub mod interaction;
+pub mod movement;
 
-pub use movement::*;
-pub use interaction::*;
 pub use crafting::*;
+pub use interaction::*;
+pub use movement::*;
