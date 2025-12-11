@@ -73,6 +73,8 @@ pub struct GameState {
     pub card_scatter_achievement: bool,
     #[serde(default)]
     pub tutorial_reward_claimed: bool,
+    #[serde(default)]
+    pub tutorial_hint_shown: bool,
     // Runtime state (not critical to save but nice to have)
     #[serde(default)]
     pub pending_messages: Vec<String>,
@@ -295,7 +297,7 @@ impl GameState {
             TUTORIAL_BOOK_ID,
             "Cabin Tutorial",
             vec![
-                "Welcome to the cabin. Start simple: use hands on bush to forage for sticks, fibers, berries and herbs. Small piles add up.",
+                "Welcome to the cabin. As you cross the threshold, a voice you don't quite own whispers: 'Mortal, read this tutorial book from the first page to the very last. If you ignore it, this world will kill you slowly.' Start simple: use hands on bush to forage for sticks, fibers, berries and herbs. Small piles add up.",
                 "To light a fire, you usually need three things: chopped firewood, kindling or tinder, and a way to spark.",
                 "The wood shed holds logs and an axe. Inside the shed, use axe on block to split logs into firewood. Logs don't last forever.",
                 "You'll also need more logs in the long run. Outside, move next to a tree and use axe on tree. Heavy swings cost energy.",
@@ -469,6 +471,20 @@ impl GameState {
             }
         }
         ids
+    }
+
+    pub fn maybe_trigger_tutorial_hint(&mut self) {
+        if self.tutorial_hint_shown {
+            return;
+        }
+        if !matches!(self.player.room, Some(Room::CabinMain)) {
+            return;
+        }
+        self.tutorial_hint_shown = true;
+        self.pending_messages.push(
+            "For a moment the air in the cabin thickens. A voice that is not quite yours echoes inside your skull:\n\"Mortal, read the cabin tutorial book from the first page to the very last. If you ignore it, this world will find slow, petty ways to kill you.\""
+                .to_string(),
+        );
     }
 
     pub fn grant_tutorial_reward_if_needed(&mut self, map: &mut WorldMap) {
@@ -812,6 +828,7 @@ impl GameState {
             card_case_open: false,
             card_scatter_achievement: false,
             tutorial_reward_claimed: false,
+            tutorial_hint_shown: false,
         };
         state.ensure_book_registry();
         state.bootstrap_structures();

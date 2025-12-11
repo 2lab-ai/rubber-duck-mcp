@@ -265,6 +265,9 @@ impl McpServer {
         // Tick the world after movement
         self.world.tick();
 
+        // Possibly trigger one-time cabin tutorial hint when entering the cabin
+        self.world.state.maybe_trigger_tutorial_hint();
+
         let text = match result {
             MoveResult::Success(msg) => {
                 let location_desc = DescriptionGenerator::describe_location(
@@ -316,6 +319,9 @@ impl McpServer {
             &self.world.state.objects,
             cabin_open,
         );
+
+        // If we just entered the cabin, surface the tutorial hint once
+        self.world.state.maybe_trigger_tutorial_hint();
 
         let text = match result {
             MoveResult::Success(msg) | MoveResult::RoomTransition(msg) => {
