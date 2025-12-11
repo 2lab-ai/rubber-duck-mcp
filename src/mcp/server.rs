@@ -847,7 +847,10 @@ You feel calmer and a bit more refreshed. It is now {}.",
     fn cmd_talk(&mut self, args: &Option<Value>) -> CallToolResult {
         let message = get_string_arg(args, "message");
         let duck_name = self.world.state.display_name(&Item::RubberDuck);
-        let result = talk_to_rubber_duck(message.as_deref(), &self.world.state, &duck_name);
+        let result = talk_to_animal_companion(message.as_deref(), &self.world.state)
+            .unwrap_or_else(|| {
+                talk_to_rubber_duck(message.as_deref(), &self.world.state, &duck_name)
+            });
 
         let text = match result {
             InteractionResult::Success(msg) => msg,

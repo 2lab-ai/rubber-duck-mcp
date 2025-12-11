@@ -126,6 +126,20 @@ const DUCK_MANNER: &[&str] = &[
     "It smiles without moving.",
 ];
 
+const DOG_REPLIES: &[&str] = &[
+    "Your dog tilts its head, ears pricked, as if trying to catch every shade of your voice.",
+    "The dog leans against your leg, a quiet weight that says it heard enough.",
+    "A slow tail wag answers you, steady and patient.",
+    "Your dog watches your face more than your hands, as if reading what you don't say aloud.",
+];
+
+const CAT_REPLIES: &[&str] = &[
+    "The cat's eyes half-close; it blinks slowly, like a tiny nod.",
+    "The cat flicks its tail once, considering, then settles a little closer.",
+    "You get a brief, deliberate head bump against your hand before it resumes its watch.",
+    "The cat pretends not to listen, but one ear stays angled toward your voice.",
+];
+
 fn random_duck_phrase(rng: &mut impl rand::Rng) -> String {
     use rand::seq::SliceRandom;
     let part_a = DUCK_GAZE
@@ -617,6 +631,65 @@ pub fn talk_to_rubber_duck(
         "{}{}\n{}\n{}",
         opener, middle, contemplation, closer
     ))
+}
+
+pub fn talk_to_animal_companion(
+    message: Option<&str>,
+    state: &GameState,
+) -> Option<InteractionResult> {
+    let player_pos = state.player.position;
+
+    let mut nearest_index: Option<usize> = None;
+    let mut nearest_distance = f32::MAX;
+
+    for (idx, w) in state.wildlife.iter().enumerate() {
+        if !w.tamed {
+            continue;
+        }
+        if !matches!(w.species, Species::Dog | Species::Cat) {
+            continue;
+        }
+        let dist = player_pos.distance_to(&w.position);
+        if dist <= 4.0 && dist < nearest_distance {
+            nearest_distance = dist;
+            nearest_index = Some(idx);
+        }
+    }
+
+    let idx = nearest_index?;
+    let companion = &state.wildlife[idx];
+    let species_name = companion.species.name();
+
+    let mut rng = rand::thread_rng();
+    let opener = match message {
+        Some(msg) if !msg.trim().is_empty() => {
+            format!("You, to your {}: \"{}\"\n", species_name, msg.trim())
+        }
+        _ => format!("You speak quietly to your {}.\n", species_name),
+    };
+
+    let reply_pool = match companion.species {
+        Species::Dog => DOG_REPLIES,
+        Species::Cat => CAT_REPLIES,
+        _ => DOG_REPLIES,
+    };
+    let reply = if reply_pool.is_empty() {
+        "It stays close, in its own thoughtful way."
+    } else {
+        let idx = rng.gen_range(0..reply_pool.len());
+        reply_pool[idx]
+    };
+
+    let closer = match companion.species {
+        Species::Dog => "The dog falls into step beside you, as if the conversation is enough.",
+        Species::Cat => "The cat settles where it can keep you in sight, gaze soft and steady.",
+        _ => "It remains near, a quiet presence.",
+    };
+
+    Some(InteractionResult::Success(format!(
+        "{}{}\n{}",
+        opener, reply, closer
+    )))
 }
 
 // --- NEW UNIVERSAL USE HANDLER ---
