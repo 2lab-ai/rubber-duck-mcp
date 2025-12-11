@@ -655,7 +655,7 @@ impl GameState {
         // Update wildlife
         let tod = self.time.time_of_day();
         for w in &mut self.wildlife {
-            w.update(tod);
+            w.update(tod, map, &self.weather);
         }
 
         // Update fireplace and collect any warnings

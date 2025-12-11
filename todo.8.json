@@ -1,0 +1,20 @@
+{
+  "task_id": 8,
+  "scope": "Simulation: Wildlife Behaviors & Observation",
+  "goal": "Define biome-based wildlife spawn tables with activity cycles, make behaviors react to time/weather, and surface richer observation from the cabin terrace and in the field.",
+  "decisions": [
+    "Keep the existing species roster but gate spawn locations by biome bands (desert west, spring north, winter east, lake center) and time-of-day activity (diurnal/nocturnal/crepuscular).",
+    "Use a lightweight activity-state update that factors time of day and severe weather (rain/blizzard/sandstorm reduces movement/hunting).",
+    "Observation detail scales with observation skill; terrace view offers a direction-based snapshot with distance hints."
+  ],
+  "plan": [
+    "Refine spawn tables: map species -> native biomes + spawn weights per region; seed spawns accordingly and allow rare lake/edge sightings.",
+    "Update wildlife update loop to respect activity schedules and weather dampening; add simple distance-aware movement limits per biome band.",
+    "Add observation outputs: terrace directional look shows nearby wildlife with distance bands; field descriptions include activity cues scaled by observation skill.",
+    "Smoke test commands (look/observe/terrace) to ensure no panics and messages show activity/weather influences."
+  ],
+  "notes": [
+    "No new species or items; focus on behavior/observation fidelity.",
+    "Keep performance light—no pathfinding beyond random moves within valid map bounds."
+  ]
+}

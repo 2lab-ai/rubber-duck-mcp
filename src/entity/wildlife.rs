@@ -1,4 +1,4 @@
-use crate::world::{Biome, Direction, Position, TimeOfDay};
+use crate::world::{Biome, Direction, Position, RegionalWeather, TimeOfDay, Weather, WorldMap};
 use rand::Rng;
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
@@ -400,16 +400,33 @@ impl Wildlife {
         }
     }
 
-    pub fn update(&mut self, time: TimeOfDay) {
+    pub fn update(&mut self, time: TimeOfDay, map: &WorldMap, weather: &RegionalWeather) {
         let mut rng = rand::thread_rng();
+        let weather_here = weather.get_for_position(self.position.row, self.position.col);
+
+        let severe = matches!(
+            weather_here,
+            Weather::Sandstorm | Weather::Blizzard | Weather::HeavyRain | Weather::HeavySnow
+        );
 
         // Update behavior
         if rng.gen_bool(0.3) {
-            self.behavior = Behavior::random_for(&self.species, time);
+            // If off-schedule or severe weather, bias toward rest/sleep
+            let schedule = self.species.activity_schedule();
+            if !schedule.is_active(time) || severe {
+                self.behavior = if rng.gen_bool(0.7) {
+                    Behavior::Sleeping
+                } else {
+                    Behavior::Resting
+                };
+            } else {
+                self.behavior = Behavior::random_for(&self.species, time);
+            }
         }
 
         // Possibly move
-        if self.behavior == Behavior::Moving || self.behavior == Behavior::Fleeing {
+        let wants_to_move = self.behavior == Behavior::Moving || self.behavior == Behavior::Fleeing;
+        if wants_to_move && !(severe && rng.gen_bool(0.7)) {
             let directions = [
                 Direction::North,
                 Direction::South,
@@ -419,7 +436,13 @@ impl Wildlife {
             let dir = directions[rng.gen_range(0..4)];
             let new_pos = self.position.move_in_direction(dir);
             if new_pos.is_valid() {
-                self.position = new_pos;
+                if let Some((r, c)) = new_pos.as_usize() {
+                    if let Some(tile) = map.get_tile(r, c) {
+                        if self.species.native_biomes().contains(&tile.biome) {
+                            self.position = new_pos;
+                        }
+                    }
+                }
             }
         }
     }
@@ -434,76 +457,40 @@ pub fn spawn_wildlife() -> Vec<Wildlife> {
     let mut wildlife = Vec::new();
     let mut rng = rand::thread_rng();
 
-    // Spring/Autumn forest wildlife (North area)
-    for _ in 0..3 {
-        let row = rng.gen_range(-10..-4);
-        let col = rng.gen_range(-3..4);
-        wildlife.push(Wildlife::new(Species::Deer, Position::new(row, col)));
-    }
-    for _ in 0..4 {
-        let row = rng.gen_range(-9..-3);
-        let col = rng.gen_range(-4..5);
-        wildlife.push(Wildlife::new(Species::Rabbit, Position::new(row, col)));
-    }
-    for _ in 0..3 {
-        let row = rng.gen_range(-8..-3);
-        let col = rng.gen_range(-3..4);
-        wildlife.push(Wildlife::new(Species::Squirrel, Position::new(row, col)));
-    }
-    for _ in 0..5 {
-        let row = rng.gen_range(-8..-3);
-        let col = rng.gen_range(-4..5);
-        wildlife.push(Wildlife::new(Species::Songbird, Position::new(row, col)));
-    }
+    let mut spawn_rect = |species: Species,
+                          count: u8,
+                          row_range: std::ops::Range<i32>,
+                          col_range: std::ops::Range<i32>| {
+        for _ in 0..count {
+            let row = rng.gen_range(row_range.clone());
+            let col = rng.gen_range(col_range.clone());
+            wildlife.push(Wildlife::new(species, Position::new(row, col)));
+        }
+    };
 
-    // Desert wildlife (West)
-    for _ in 0..2 {
-        let row = rng.gen_range(-2..5);
-        let col = rng.gen_range(-12..-5);
-        wildlife.push(Wildlife::new(
-            Species::DesertLizard,
-            Position::new(row, col),
-        ));
-    }
-    wildlife.push(Wildlife::new(
-        Species::DesertFox,
-        Position::new(rng.gen_range(-2..4), -10),
-    ));
-    wildlife.push(Wildlife::new(
-        Species::Hawk,
-        Position::new(rng.gen_range(-1..4), -8),
-    ));
+    // Spring/Autumn forest wildlife (North band, rows <= -4)
+    spawn_rect(Species::Deer, 3, -12..-4, -4..5);
+    spawn_rect(Species::Rabbit, 4, -11..-3, -4..5);
+    spawn_rect(Species::Squirrel, 3, -10..-3, -3..4);
+    spawn_rect(Species::Songbird, 5, -10..-3, -4..5);
 
-    // Winter wildlife (East)
-    for _ in 0..2 {
-        let row = rng.gen_range(-3..4);
-        let col = rng.gen_range(6..12);
-        wildlife.push(Wildlife::new(Species::SnowFox, Position::new(row, col)));
-    }
-    wildlife.push(Wildlife::new(
-        Species::Owl,
-        Position::new(rng.gen_range(-2..4), 10),
-    ));
-    wildlife.push(Wildlife::new(
-        Species::Caribou,
-        Position::new(rng.gen_range(-3..3), rng.gen_range(8..12)),
-    ));
+    // Desert wildlife (West, cols <= -8)
+    spawn_rect(Species::DesertLizard, 3, -3..5, -14..-7);
+    spawn_rect(Species::Scorpion, 1, -2..3, -14..-8);
+    spawn_rect(Species::DesertFox, 1, -2..4, -12..-8);
+    spawn_rect(Species::Hawk, 1, -1..4, -10..-7);
 
-    // Lake wildlife
-    for _ in 0..4 {
-        let row = rng.gen_range(-5..-1);
-        let col = rng.gen_range(-3..4);
-        wildlife.push(Wildlife::new(Species::Duck, Position::new(row, col)));
-    }
-    for _ in 0..3 {
-        let row = rng.gen_range(-5..-1);
-        let col = rng.gen_range(-4..5);
-        wildlife.push(Wildlife::new(Species::Fish, Position::new(row, col)));
-    }
-    wildlife.push(Wildlife::new(
-        Species::Heron,
-        Position::new(rng.gen_range(-4..-1), rng.gen_range(-2..4)),
-    ));
+    // Winter wildlife (East, cols >= 7)
+    spawn_rect(Species::SnowFox, 2, -4..5, 7..13);
+    spawn_rect(Species::Owl, 1, -3..4, 9..13);
+    spawn_rect(Species::Caribou, 1, -3..3, 8..12);
+
+    // Lake wildlife (lake band rows -6..0 cols -4..5)
+    spawn_rect(Species::Duck, 4, -6..0, -4..5);
+    spawn_rect(Species::Fish, 3, -6..0, -4..5);
+    spawn_rect(Species::Heron, 1, -5..-1, -3..4);
+    spawn_rect(Species::Frog, 2, -5..0, -3..4);
+    spawn_rect(Species::Dragonfly, 2, -5..0, -3..4);
 
     wildlife
 }

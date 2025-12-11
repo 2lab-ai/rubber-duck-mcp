@@ -212,21 +212,44 @@ impl DescriptionGenerator {
             tile.biome,
         ));
 
-        // Visible wildlife
+        // Visible wildlife (scaled by observation and weather)
+        let observation = player.skills.get("observation") as f32;
+        let mut detection_radius = 2.5 + observation / 25.0;
+        let current_weather = weather.get_for_position(player_pos.row, player_pos.col);
+        if matches!(
+            current_weather,
+            Weather::Sandstorm | Weather::Blizzard | Weather::HeavyRain | Weather::HeavySnow
+        ) {
+            detection_radius *= 0.5;
+        } else if matches!(current_weather, Weather::Fog) {
+            detection_radius *= 0.7;
+        }
         let nearby_wildlife: Vec<_> = wildlife
             .iter()
-            .filter(|w| w.position.distance_to(&player.position) < 3.0)
+            .filter(|w| w.position.distance_to(&player.position) <= detection_radius)
             .collect();
 
         if !nearby_wildlife.is_empty() {
             description.push_str("\n\n");
             let mut rng = rand::thread_rng();
-            // Pick up to 3 wildlife to describe
             let to_describe: Vec<_> = nearby_wildlife
                 .choose_multiple(&mut rng, 3.min(nearby_wildlife.len()))
                 .collect();
             for w in to_describe {
-                description.push_str(&w.describe());
+                let distance = player.position.distance_to(&w.position);
+                let band = if distance < 1.5 {
+                    "right next to you"
+                } else if distance < 3.0 {
+                    "very close"
+                } else {
+                    "a short distance away"
+                };
+                let mut line = w.describe();
+                if observation >= 15.0 {
+                    line.push(' ');
+                    line.push_str(&format!("(It seems {}.)", band));
+                }
+                description.push_str(&line);
                 description.push(' ');
             }
         }
@@ -627,7 +650,14 @@ impl DescriptionGenerator {
     ) -> String {
         // If in terrace, special viewing
         if matches!(player.room, Some(Room::CabinTerrace)) {
-            return Self::terrace_look_direction(dir, time, weather);
+            return Self::terrace_look_direction(
+                dir,
+                time,
+                weather,
+                &player.position,
+                wildlife,
+                player.skills.get("observation"),
+            );
         }
 
         let look_pos = player.position.move_in_direction(dir);
@@ -764,10 +794,13 @@ impl DescriptionGenerator {
         dir: Direction,
         time: &WorldTime,
         weather: &RegionalWeather,
+        player_pos: &Position,
+        wildlife: &[Wildlife],
+        observation: u8,
     ) -> String {
         let tod = time.time_of_day();
 
-        match dir {
+        let mut desc = match dir {
             Direction::West => {
                 let w = weather.west;
                 format!("You gaze west over the lake toward the desert. {}",
@@ -804,7 +837,49 @@ impl DescriptionGenerator {
                 "You look back at the cabin behind you. Warm and welcoming, smoke may or may not rise from its chimney.".to_string()
             }
             _ => "You can't look that direction from here.".to_string(),
+        };
+
+        // Add wildlife glimpses in the chosen direction
+        let mut animals = Vec::new();
+        for w in wildlife.iter().filter(|w| {
+            let dr = w.position.row - player_pos.row;
+            let dc = w.position.col - player_pos.col;
+            let dist = (dr * dr + dc * dc) as f32;
+            if dist > 64.0 {
+                return false;
+            }
+            match dir {
+                Direction::North => dr < 0,
+                Direction::South => dr > 0,
+                Direction::East => dc > 0,
+                Direction::West => dc < 0,
+                _ => false,
+            }
+        }) {
+            let distance = player_pos.distance_to(&w.position);
+            let band = if distance < 2.5 {
+                "very near"
+            } else if distance < 5.0 {
+                "not far"
+            } else {
+                "in the distance"
+            };
+            let mut line = w.describe();
+            if observation >= 12 {
+                line.push(' ');
+                line.push_str(&format!("(You spot it {}.)", band));
+            }
+            animals.push(line);
+            if animals.len() >= 3 {
+                break;
+            }
         }
+        if !animals.is_empty() {
+            desc.push_str("\n\n");
+            desc.push_str(&animals.join(" "));
+        }
+
+        desc
     }
 }
 
