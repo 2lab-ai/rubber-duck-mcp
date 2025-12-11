@@ -222,6 +222,169 @@ impl GameState {
         }
     }
 
+    /// Apply a melee attack from the player to a nearby wildlife entity, if any matches the target hint.
+    /// Returns a descriptive message if an attack occurred.
+    pub fn attack_nearby_wildlife(
+        &mut self,
+        map: &WorldMap,
+        _weapon: &Item,
+        base_damage: f32,
+        target_hint: Option<&str>,
+    ) -> Option<String> {
+        let pos = self.player.position;
+        let hint = target_hint
+            .map(|s| s.to_lowercase())
+            .unwrap_or_else(|| String::new());
+
+        let mut candidate_index: Option<usize> = None;
+        let mut candidate_distance = f32::MAX;
+
+        for (idx, w) in self.wildlife.iter().enumerate() {
+            let dist = pos.distance_to(&w.position);
+            if dist > 1.6 {
+                continue;
+            }
+            if let Some((r, c)) = w.position.as_usize() {
+                if !map.is_walkable(r, c) {
+                    continue;
+                }
+            }
+            if !hint.is_empty() {
+                let name = w.species.name().to_lowercase();
+                if !name.contains(&hint) && !hint.contains(&name) && !hint.contains("animal") {
+                    continue;
+                }
+            }
+            if dist < candidate_distance {
+                candidate_distance = dist;
+                candidate_index = Some(idx);
+            }
+        }
+
+        let idx = candidate_index?;
+        if idx >= self.wildlife.len() {
+            return None;
+        }
+
+        let mut rng = rand::thread_rng();
+        let w = &mut self.wildlife[idx];
+        let name = w.species.name();
+        let hit = match w.body.apply_random_damage(&mut rng, base_damage) {
+            Some(hit) => hit,
+            None => return None,
+        };
+
+        // Sync a coarse overall health ratio into the global health bar for now
+        let overall_ratio = w.body.overall_health_ratio();
+        if overall_ratio <= 0.0 {
+            // nothing special; corpse will be spawned below
+        }
+
+        let message = w.body.describe_hit(&hit, name);
+
+        let killed = w.body.is_vital_broken();
+        if killed {
+            // Spawn a corpse object at this position and remove the living wildlife entry
+            let corpse = WorldObject::new(ObjectKind::Corpse(Corpse {
+                species: w.species,
+                freshness: 0,
+            }));
+            let id = format!("corpse-{}-{}", name, self.objects.placed.len());
+            self.objects.add(id, w.position, corpse);
+
+            self.wildlife.remove(idx);
+        }
+
+        // Small chance to improve survival skill through direct hunting practice
+        if rng.gen_bool(0.3) {
+            self.player.skills.improve("survival", 1);
+        }
+
+        // Slight mood impact depending on outcome
+        if killed {
+            self.player.modify_mood(-2.0);
+        } else {
+            self.player.modify_mood(-1.0);
+        }
+
+        Some(message)
+    }
+
+    fn update_player_cognition(&mut self) {
+        let body = &self.player.body;
+        let head_ratio = body.head_health_ratio();
+        let health_ratio = (self.player.health / 100.0).clamp(0.0, 1.0);
+        let energy_ratio = (self.player.energy / 100.0).clamp(0.0, 1.0);
+
+        let mut cognition = 100.0;
+
+        // Head injuries have the largest impact
+        let head_penalty = (1.0 - head_ratio) * 40.0;
+        // Low energy makes thinking harder, especially below ~70
+        let energy_penalty = ((0.7 - energy_ratio).max(0.0) / 0.7) * 30.0;
+        // Overall poor health also drags cognition down
+        let health_penalty = ((0.8 - health_ratio).max(0.0) / 0.8) * 20.0;
+
+        cognition -= head_penalty + energy_penalty + health_penalty;
+        self.player.cognition = cognition.clamp(0.0, 100.0);
+    }
+
+    /// Butcher a corpse at the player's current position, if any, yielding resources and updating state.
+    pub fn butcher_corpse_at_player(&mut self, _weapon: &Item) -> Option<String> {
+        let pos = self.player.position;
+
+        let mut found_index: Option<usize> = None;
+        let mut species: Option<Species> = None;
+
+        for (idx, po) in self.objects.placed.iter().enumerate() {
+            if po.position == pos {
+                if let ObjectKind::Corpse(c) = &po.object.kind {
+                    found_index = Some(idx);
+                    species = Some(c.species);
+                    break;
+                }
+            }
+        }
+
+        let idx = found_index?;
+        let species = species.unwrap();
+
+        let (meat, hide, fat) = match species {
+            Species::Deer | Species::Caribou => (6, 2, 2),
+            Species::Wolf | Species::Fox | Species::DesertFox | Species::SnowFox => (4, 1, 2),
+            Species::SnowHare | Species::Rabbit => (2, 1, 1),
+            _ => (3, 1, 1),
+        };
+
+        if meat == 0 && hide == 0 && fat == 0 {
+            return None;
+        }
+
+        if meat > 0 {
+            self.player.inventory.add(Item::RawMeat, meat as u32);
+        }
+        if hide > 0 {
+            self.player.inventory.add(Item::RawHide, hide as u32);
+        }
+        if fat > 0 {
+            self.player.inventory.add(Item::AnimalFat, fat as u32);
+        }
+
+        self.player.skills.improve("survival", 2);
+        self.player.skills.improve("tailoring", 1);
+        self.player.modify_energy(-5.0);
+
+        if let Some(po) = self.objects.placed.get_mut(idx) {
+            po.object.kind =
+                ObjectKind::GenericStructure("picked-over remains".to_string());
+        }
+
+        Some(
+            "You carefully butcher the carcass, setting aside meat, hide, and fat for later use."
+                .to_string(),
+        )
+    }
+
     pub fn refresh_blueprint_knowledge(&mut self, push_messages: bool) {
         let tutorial_done = self.book_completed(TUTORIAL_BOOK_ID);
         let fishing_done = self.book_completed(FISHING_BOOK_ID);
@@ -714,6 +877,7 @@ impl GameState {
 
         self.ensure_table_object(table_items);
         self.ensure_duck_present();
+        self.ensure_pig_carcass_near_cabin();
     }
 
     fn ensure_tree_objects_from_legacy(&mut self) {
@@ -725,6 +889,22 @@ impl GameState {
                 self.objects
                     .add(id, pos, WorldObject::new(ObjectKind::Tree(tree)));
             }
+        }
+    }
+
+    fn ensure_pig_carcass_near_cabin(&mut self) {
+        // Place a small starter carcass just south of the cabin, if none exists yet.
+        let pig_pos = Position::new(1, 0);
+        let exists = self.objects.placed.iter().any(|po| {
+            po.position == pig_pos
+                && matches!(po.object.kind, ObjectKind::Corpse(_) | ObjectKind::GenericStructure(_))
+        });
+        if !exists {
+            let corpse = WorldObject::new(ObjectKind::Corpse(Corpse {
+                species: Species::Caribou,
+                freshness: 0,
+            }));
+            self.objects.add("starter_pig", pig_pos, corpse);
         }
     }
 
@@ -839,6 +1019,7 @@ impl GameState {
         state.ensure_card_case_state(map);
         state.seed_tree_population(map, &mut rng, 10);
         state.ensure_tree_density(map, &mut rng);
+        state.update_player_cognition();
         state
     }
 
@@ -890,6 +1071,7 @@ impl GameState {
                     let mut rng = rand::thread_rng();
                     state.seed_tree_population(map, &mut rng, 10);
                     state.ensure_tree_density(map, &mut rng);
+                    state.update_player_cognition();
                     state
                 }
                 Err(e) => {
@@ -955,6 +1137,9 @@ impl GameState {
 
         // Check for newly unlocked blueprints as skills/books progress
         self.refresh_blueprint_knowledge(true);
+
+        // Keep cognition in sync with injuries, health, and rest
+        self.update_player_cognition();
     }
 
     fn update_forage_nodes(&mut self, map: &WorldMap, rng: &mut impl Rng) {

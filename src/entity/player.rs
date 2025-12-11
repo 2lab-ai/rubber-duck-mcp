@@ -1,3 +1,4 @@
+use super::body::Body;
 use super::blueprint::Blueprint;
 use super::objects::Item;
 use crate::world::{Direction, Position};
@@ -263,6 +264,8 @@ pub struct Player {
     pub known_blueprints: HashSet<Item>,
     #[serde(default = "Player::default_tool_durability")]
     pub tool_durability: HashMap<Item, u32>,
+    #[serde(default = "Player::default_body")]
+    pub body: Body,
 
     // Stats
     pub health: f32, // 0-100
@@ -273,6 +276,8 @@ pub struct Player {
     pub fullness: f32, // 0-100 (hunger)
     #[serde(default = "Player::default_hydration")]
     pub hydration: f32, // 0-100 (thirst)
+    #[serde(default = "Player::default_cognition")]
+    pub cognition: f32, // 0-100 (mental sharpness)
 
     // Progression
     pub skills: Skills,
@@ -300,6 +305,7 @@ impl Player {
             visited,
             known_blueprints: HashSet::new(),
             tool_durability: HashMap::new(),
+            body: Body::human_default(),
 
             health: 100.0,
             warmth: 50.0,
@@ -307,6 +313,7 @@ impl Player {
             mood: 70.0,
             fullness: Self::default_fullness(),
             hydration: Self::default_hydration(),
+            cognition: Self::default_cognition(),
 
             skills: Skills::new(),
             inventory: Inventory::new(),
@@ -326,6 +333,10 @@ impl Player {
 
     pub fn default_tool_durability() -> HashMap<Item, u32> {
         HashMap::new()
+    }
+
+    pub fn default_body() -> Body {
+        Body::human_default()
     }
 
     pub fn is_indoor(&self) -> bool {
@@ -388,6 +399,30 @@ impl Player {
         self.hydration = (self.hydration + delta).clamp(0.0, 100.0);
     }
 
+    pub fn cognition_description(&self) -> &'static str {
+        match self.cognition {
+            c if c < 20.0 => "barely coherent",
+            c if c < 40.0 => "foggy and scattered",
+            c if c < 60.0 => "a little hazy",
+            c if c < 80.0 => "clear-headed",
+            _ => "sharp and focused",
+        }
+    }
+
+    /// Effective skill level after cognition penalties/bonuses
+    pub fn effective_skill(&self, skill: &str) -> u8 {
+        let base = self.skills.get(skill) as f32;
+        let factor = match self.cognition {
+            c if c >= 90.0 => 1.05,
+            c if c >= 70.0 => 1.0,
+            c if c >= 50.0 => 0.9,
+            c if c >= 30.0 => 0.75,
+            _ => 0.6,
+        };
+        let value = (base * factor).round().clamp(1.0, 100.0);
+        value as u8
+    }
+
     /// Calculate comfort level based on warmth
     pub fn comfort_description(&self) -> &'static str {
         match self.warmth {
@@ -443,12 +478,13 @@ impl Player {
 
     pub fn status_summary(&self) -> String {
         format!(
-            "You feel {} and {}. Your energy level is {}. You are {} and {}.",
+            "You feel {} and {}. Your energy level is {}. You are {} and {}. Your mind feels {}.",
             self.comfort_description(),
             self.mood_description(),
             self.energy_description(),
             self.fullness_description(),
             self.hydration_description(),
+            self.cognition_description(),
         )
     }
 
@@ -457,6 +493,9 @@ impl Player {
     }
     fn default_hydration() -> f32 {
         70.0
+    }
+    fn default_cognition() -> f32 {
+        100.0
     }
 }
 

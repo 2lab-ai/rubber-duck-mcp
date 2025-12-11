@@ -71,9 +71,13 @@ pub enum Item {
     CookedBerries,
     HerbalTea, // Finished tea!
     RubberDuck,
+    RawMeat,
+    CookedMeat,
+    RawHide,
+    AnimalFat,
 }
 
-const ALL_ITEMS: [Item; 56] = [
+const ALL_ITEMS: [Item; 60] = [
     Item::Axe,
     Item::StoneAxe,
     Item::Knife,
@@ -130,6 +134,10 @@ const ALL_ITEMS: [Item; 56] = [
     Item::CookedBerries,
     Item::HerbalTea,
     Item::RubberDuck,
+    Item::RawMeat,
+    Item::CookedMeat,
+    Item::RawHide,
+    Item::AnimalFat,
 ];
 
 impl Item {
@@ -191,6 +199,10 @@ impl Item {
             Item::CookedBerries => "roasted berries",
             Item::HerbalTea => "cup of herbal tea",
             Item::RubberDuck => "rubber duck",
+            Item::RawMeat => "raw meat",
+            Item::CookedMeat => "cooked meat",
+            Item::RawHide => "raw hide",
+            Item::AnimalFat => "animal fat",
         }
     }
 
@@ -257,6 +269,10 @@ impl Item {
             Item::CookedBerries => &["roasted berries", "cooked berries"],
             Item::HerbalTea => &["tea", "herbal tea", "cup of tea"],
             Item::RubberDuck => &["duck", "yellow duck", "rubber ducky", "sage"],
+            Item::RawMeat => &["meat", "raw meat", "fresh meat"],
+            Item::CookedMeat => &["cooked meat", "grilled meat"],
+            Item::RawHide => &["hide", "raw hide", "animal hide"],
+            Item::AnimalFat => &["fat", "animal fat"],
         }
     }
 
@@ -310,6 +326,10 @@ impl Item {
             Item::CookedBerries => "Roasted berries that smell sweet and tart.",
             Item::CardCase => "A worn leather card case that rattles softly when moved.",
             Item::PlayingCard => "A single playing card, edges a little frayed.",
+            Item::RawMeat => "Fresh cuts of raw meat from a recent kill.",
+            Item::CookedMeat => "Cooked meat, savory and filling.",
+            Item::RawHide => "A raw animal hide that still needs tanning.",
+            Item::AnimalFat => "Rendered animal fat, useful for cooking or as fuel.",
             _ => "A useful item.",
         }
     }
@@ -337,6 +357,10 @@ impl Item {
             Item::Raft => 8.0,
             Item::CardCase => 0.2,
             Item::PlayingCard => 0.01,
+            Item::RawMeat => 0.5,
+            Item::CookedMeat => 0.4,
+            Item::RawHide => 0.7,
+            Item::AnimalFat => 0.3,
             _ => 0.1,
         }
     }
@@ -355,6 +379,7 @@ impl Item {
             Item::DryLeaves => Some(3.0),
             Item::Charcoal => Some(40.0),
             Item::OldBook => Some(8.0),
+            Item::AnimalFat => Some(20.0),
             _ => None,
         }
     }

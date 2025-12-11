@@ -1,0 +1,20 @@
+{
+  "task_id": 18,
+  "scope": "Realism: Cognition & Condition",
+  "goal": "Add a cognition stat that reflects head injuries, sleep deprivation, and overall condition, then use it to modulate skill effectiveness and failure chances.",
+  "decisions": [
+    "Derive cognition (0-100) from head-part health, energy (sleep), and overall health, with clear bands like clear-headed, foggy, and impaired.",
+    "Apply cognition as a multiplier or modifier to effective skill levels and select interaction outcomes (success/failure text, mishaps) rather than introducing a separate RNG system.",
+    "Surface cognition in status-style summaries and occasional narrative messages so the player can feel the link between rest, injuries, and mental sharpness."
+  ],
+  "plan": [
+    "Add cognition to player state and compute it each tick or when relevant stats (head hp, energy, health) change.",
+    "Wire cognition into skill lookups and key interactions so low cognition gently reduces effectiveness and raises failure chances.",
+    "Extend status output and a few interaction descriptions to report cognition state in a grounded, non-gamey way."
+  ],
+  "notes": [
+    "Avoid making cognition too punitive; it should be a soft pressure toward rest and care, not a hard failure spiral.",
+    "Base the initial tuning on existing health/energy ranges and adjust after simple playtesting."
+  ]
+}
+

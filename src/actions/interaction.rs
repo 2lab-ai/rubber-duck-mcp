@@ -824,6 +824,57 @@ pub fn try_use(
         }
     }
 
+    // 3a. Combat: attack nearby wildlife with melee weapons
+    if matches!(
+        item,
+        Item::Axe | Item::StoneAxe | Item::Knife | Item::StoneKnife | Item::SharpStone
+    ) {
+        if let Some(target) = target_str {
+            let t = target.to_lowercase();
+            let looks_like_creature = t.contains("deer")
+                || t.contains("rabbit")
+                || t.contains("fox")
+                || t.contains("wolf")
+                || t.contains("hare")
+                || t.contains("boar")
+                || t.contains("pig")
+                || t.contains("animal")
+                || t.contains("creature");
+            if looks_like_creature {
+                if state.player.energy < 5.0 {
+                    return InteractionResult::Failure(
+                        "You are too exhausted to swing a weapon with any force right now."
+                            .to_string(),
+                    );
+                }
+
+                let base_damage = match item {
+                    Item::Axe => 32.0,
+                    Item::StoneAxe => 26.0,
+                    Item::Knife => 22.0,
+                    Item::StoneKnife => 18.0,
+                    Item::SharpStone => 14.0,
+                    _ => 18.0,
+                };
+
+                if let Some(msg) =
+                    state.attack_nearby_wildlife(map, &item, base_damage, Some(target))
+                {
+                    state.damage_tool(&item, 1, "striking a creature");
+                    return InteractionResult::ActionSuccess {
+                        message: msg,
+                        time_cost: 1,
+                        energy_cost: 6.0,
+                    };
+                } else {
+                    return InteractionResult::Failure(
+                        "You don't see any such creature close enough to strike.".to_string(),
+                    );
+                }
+            }
+        }
+    }
+
     // Raft: short lake excursion for observations
     if item == Item::Raft {
         let pos = state.player.position;
@@ -890,10 +941,45 @@ pub fn try_use(
         };
     }
 
-    // 3b. Cooking simple foods on fire
+    // 3b. Butchering corpses into resources
     if matches!(
         item,
-        Item::Fish | Item::SmallFish | Item::BigFish | Item::WildBerry
+        Item::Knife | Item::StoneKnife | Item::Axe | Item::StoneAxe | Item::SharpStone
+    ) {
+        if let Some(target) = target_str {
+            let t = target.to_lowercase();
+            if t.contains("corpse")
+                || t.contains("carcass")
+                || t.contains("body")
+                || t.contains("pig")
+                || t.contains("boar")
+            {
+                if state.player.energy < 5.0 {
+                    return InteractionResult::Failure(
+                        "You are too tired to properly butcher anything right now.".to_string(),
+                    );
+                }
+
+                if let Some(msg) = state.butcher_corpse_at_player(&item) {
+                    state.damage_tool(&item, 1, "butchering a carcass");
+                    return InteractionResult::ActionSuccess {
+                        message: msg,
+                        time_cost: 2,
+                        energy_cost: 0.0,
+                    };
+                }
+
+                return InteractionResult::Failure(
+                    "You don't see a suitable carcass here to butcher.".to_string(),
+                );
+            }
+        }
+    }
+
+    // 3c. Cooking simple foods on fire
+    if matches!(
+        item,
+        Item::Fish | Item::SmallFish | Item::BigFish | Item::WildBerry | Item::RawMeat
     ) {
         let in_cabin = matches!(state.player.room, Some(Room::CabinMain));
         let fire_lit = state
@@ -921,20 +1007,34 @@ pub fn try_use(
             energy_cost += 2.0;
         }
 
-        if matches!(item, Item::Fish | Item::SmallFish | Item::BigFish) {
+        if matches!(
+            item,
+            Item::Fish | Item::SmallFish | Item::BigFish | Item::RawMeat
+        ) {
             if !state.player.inventory.remove(&item, 1) {
-                return InteractionResult::Failure("You don't have a fish to cook.".to_string());
+                return InteractionResult::Failure(
+                    "You don't have anything suitable to cook.".to_string(),
+                );
             }
-            let yield_count = if item == Item::BigFish { 2 } else { 1 };
-            if item == Item::BigFish {
-                time_cost += 1;
-            }
-            state.player.inventory.add(Item::CookedFish, yield_count);
-            let portion_text = if yield_count > 1 {
-                "You portion the large fish into hearty fillets and grill them until they flake easily."
+            let (yield_item, yield_count, extra_time, text) = if item == Item::RawMeat {
+                (Item::CookedMeat, 1, 1, "You grill the meat over the fire until it sizzles and smells savory.")
             } else {
-                "You grill the fish over the fire until it flakes easily."
+                let yield_count = if item == Item::BigFish { 2 } else { 1 };
+                let extra_time = if item == Item::BigFish { 1 } else { 0 };
+                let text = if yield_count > 1 {
+                    "You portion the large fish into hearty fillets and grill them until they flake easily."
+                } else {
+                    "You grill the fish over the fire until it flakes easily."
+                };
+                (Item::CookedFish, yield_count, extra_time, text)
             };
+
+            if extra_time > 0 {
+                time_cost += extra_time;
+            }
+            state.player.inventory.add(yield_item, yield_count);
+
+            let portion_text = text;
             return InteractionResult::ActionSuccess {
                 message: portion_text.to_string(),
                 time_cost,
@@ -1026,6 +1126,8 @@ pub fn try_use(
             | Item::SmallFish
             | Item::Fish
             | Item::BigFish
+            | Item::RawMeat
+            | Item::CookedMeat
     ) {
         return handle_consumption(state, item);
     }
@@ -1298,7 +1400,7 @@ fn handle_foraging(
     map: &WorldMap,
 ) -> InteractionResult {
     let mut rng = rand::thread_rng();
-    let skill = state.player.skills.get("foraging");
+    let skill = state.player.effective_skill("foraging");
     let pos = state.player.position;
 
     // Check energy
@@ -1586,6 +1688,18 @@ fn handle_consumption(state: &mut GameState, item: Item) -> InteractionResult {
             state.player.modify_mood(4.0);
             "You eat the warm, cooked fish. Protein and warmth spread through you.".to_string()
         }
+        Item::RawMeat => {
+            state.player.modify_fullness(18.0);
+            state.player.modify_health(-2.0);
+            state.player.modify_mood(-3.0);
+            "You chew the raw meat. It fills you, but your stomach protests.".to_string()
+        }
+        Item::CookedMeat => {
+            state.player.modify_fullness(32.0);
+            state.player.modify_mood(6.0);
+            "You eat the cooked meat. Rich warmth and strength spread through your body."
+                .to_string()
+        }
         Item::CookedBerries => {
             state.player.modify_fullness(12.0);
             state.player.modify_mood(6.0);
@@ -1679,8 +1793,8 @@ pub fn try_fish(
         outcomes[3].1 += 6;
     }
 
-    let skill_bonus = (state.player.skills.get("survival") as u32 / 12)
-        + (state.player.skills.get("observation") as u32 / 20);
+    let skill_bonus = (state.player.effective_skill("survival") as u32 / 12)
+        + (state.player.effective_skill("observation") as u32 / 20);
     if skill_bonus > 0 {
         outcomes[0].1 += skill_bonus;
         outcomes[3].1 = outcomes[3].1.saturating_sub(skill_bonus.min(outcomes[3].1));

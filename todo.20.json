@@ -1,0 +1,20 @@
+{
+  "task_id": 20,
+  "scope": "Content: Cabin Pig Butchering Tutorial",
+  "goal": "Create an early-game tutorial scenario where the player finds a small pig carcass and a knife by the cabin, learns to butcher it, and cooks the meat on the fireplace.",
+  "decisions": [
+    "Spawn a small pig corpse and a knife on the path in front of the cabin in the initial world state so they appear naturally in the first few looks/moves.",
+    "Use the existing tutorial book or a short ambient message to hint at taking the knife and using it on the pig to learn butchering.",
+    "Ensure the yields are modest (a few pieces of meat, a small hide, some fat) and that cooking the meat over the cabin fire is clearly supported by the existing cooking system."
+  ],
+  "plan": [
+    "Place a small pig corpse object and a knife near the cabin in the initial state/persistence bootstrap.",
+    "Add or update tutorial text to gently direct the player toward taking the knife, butchering the pig, and bringing the meat inside.",
+    "Verify that butchering the pig grants meat, hide, and fat, and that the meat can be cooked on the cabin fireplace using the current cooking flow."
+  ],
+  "notes": [
+    "Tone should emphasize respect and gratitude for the animal rather than gore or shock.",
+    "This tutorial should remain optional and non-blocking; players who ignore the pig can still progress via foraging and fishing."
+  ]
+}
+

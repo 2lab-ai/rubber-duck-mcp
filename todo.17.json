@@ -1,0 +1,20 @@
+{
+  "task_id": 17,
+  "scope": "System Core: Body & Damage",
+  "goal": "Introduce RimWorld-style body parts for player and wildlife, with per-part durability, vital-part death, and movement/usage penalties.",
+  "decisions": [
+    "Represent each living entity (player, humanoids, animals) with a Body composed of named parts (head, torso, arms/legs or 4 legs) that track max_hp and current hp separately from the legacy health stat.",
+    "Mark head/torso as vital parts that cause immediate death when reduced to zero hp, and treat limbs as non-vital parts that instead impair movement or manipulation when disabled.",
+    "Route all weapon-like use interactions (axe/knife/stone weapons) through a shared damage handler that picks a target body part, applies damage, checks for death, and updates aggregate health/mood state."
+  ],
+  "plan": [
+    "Define body-part data structures and templates for humanoid and quadruped creatures, and attach them to Player and wildlife entities.",
+    "Implement a damage application API that selects a body part, applies damage, and enforces vital-part death and limb impairment rules.",
+    "Integrate the damage API into the universal use handler for attacks (use axe/knife on creature) and sync aggregate body damage with existing health/mood calculations."
+  ],
+  "notes": [
+    "Keep serialization backward compatible by adding body data with safe defaults and deriving legacy health from body-part aggregates where possible.",
+    "Start with basic species templates (player, deer, boar, wolf) and extend to others later as needed."
+  ]
+}
+

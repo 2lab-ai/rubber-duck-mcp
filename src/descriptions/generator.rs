@@ -235,7 +235,7 @@ impl DescriptionGenerator {
         ));
 
         // Visible wildlife (scaled by observation and weather)
-        let observation = player.skills.get("observation") as f32;
+        let observation = player.effective_skill("observation") as f32;
         let mut detection_radius = 2.5 + observation / 25.0;
         let current_weather = weather.get_for_position(player_pos.row, player_pos.col);
         if matches!(
@@ -684,7 +684,7 @@ impl DescriptionGenerator {
                 weather,
                 &player.position,
                 wildlife,
-                player.skills.get("observation"),
+                player.effective_skill("observation"),
             );
         }
 

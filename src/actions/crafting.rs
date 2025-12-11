@@ -331,7 +331,7 @@ fn try_chop(player: &mut Player, wood_shed: &mut WoodShed) -> CraftResult {
     }
 
     // Skill check
-    let skill = player.skills.get("woodcutting");
+    let skill = player.effective_skill("woodcutting");
     let base_chance = 50.0;
     let skill_bonus = skill as f32 / 2.0;
     let success_chance = (base_chance + skill_bonus) / 100.0;
@@ -479,7 +479,7 @@ fn attempt_light_fire(
         );
     }
 
-    let skill = player.skills.get("fire_making") as f32;
+    let skill = player.effective_skill("fire_making") as f32;
     let base_chance = 50.0 + bonus;
     let success_chance = ((base_chance + skill * 0.5) / 100.0).min(0.95);
 
@@ -647,7 +647,7 @@ fn try_chop_tree(
 
     player.modify_energy(-6.0);
 
-    let skill = player.skills.get("woodcutting");
+    let skill = player.effective_skill("woodcutting");
     let base = 55.0;
     let success_chance = ((base + skill as f32 * 0.4) / 100.0).min(0.95);
 

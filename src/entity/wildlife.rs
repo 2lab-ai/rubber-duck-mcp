@@ -1,3 +1,4 @@
+use crate::entity::Body;
 use crate::world::{Biome, Direction, Position, RegionalWeather, TimeOfDay, Weather, WorldMap};
 use rand::Rng;
 use serde::{Deserialize, Serialize};
@@ -98,6 +99,7 @@ impl Species {
             Species::Butterfly | Species::Bee => {
                 vec![Biome::SpringForest, Biome::MixedForest, Biome::Oasis]
             }
+            // Default fallback (should not normally be used)
         }
     }
 
@@ -388,6 +390,10 @@ pub struct Wildlife {
     pub species: Species,
     pub position: Position,
     pub behavior: Behavior,
+    #[serde(default)]
+    pub body: Body,
+    #[serde(default = "Wildlife::default_alive")]
+    pub alive: bool,
 }
 
 impl Wildlife {
@@ -397,7 +403,13 @@ impl Wildlife {
             species,
             position,
             behavior: Behavior::Resting,
+            body: Body::for_species(species),
+            alive: true,
         }
+    }
+
+    fn default_alive() -> bool {
+        true
     }
 
     pub fn update(&mut self, time: TimeOfDay, map: &WorldMap, weather: &RegionalWeather) {
@@ -424,8 +436,16 @@ impl Wildlife {
             }
         }
 
-        // Possibly move
-        let wants_to_move = self.behavior == Behavior::Moving || self.behavior == Behavior::Fleeing;
+        // Possibly move (reduced if movement limbs are badly injured)
+        let movement_factor = self.body.movement_factor();
+        let mut wants_to_move =
+            self.behavior == Behavior::Moving || self.behavior == Behavior::Fleeing;
+        if movement_factor < 0.5 {
+            // Badly injured legs: often stay put
+            if rng.gen_bool(0.7) {
+                wants_to_move = false;
+            }
+        }
         if wants_to_move && !(severe && rng.gen_bool(0.7)) {
             let directions = [
                 Direction::North,

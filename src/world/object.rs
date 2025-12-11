@@ -1,6 +1,6 @@
 use serde::{Deserialize, Serialize};
 
-use crate::entity::{Cabin, Item, Tree, TreeType, WoodShed};
+use crate::entity::{Cabin, Item, Species, Tree, TreeType, WoodShed};
 use crate::world::Position;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
@@ -51,6 +51,12 @@ impl ObjectSurface {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct Corpse {
+    pub species: Species,
+    pub freshness: u32,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub enum ObjectKind {
     Cabin(Cabin),
     WoodShed(WoodShed),
@@ -58,6 +64,7 @@ pub enum ObjectKind {
     Table,
     Wall,
     Boulder,
+    Corpse(Corpse),
     GenericStructure(String),
 }
 
@@ -75,6 +82,7 @@ impl ObjectKind {
             ObjectKind::Table => "table".to_string(),
             ObjectKind::Wall => "wall".to_string(),
             ObjectKind::Boulder => "boulder".to_string(),
+            ObjectKind::Corpse(corpse) => format!("{} carcass", corpse.species.name()),
             ObjectKind::GenericStructure(name) => name.clone(),
         }
     }
@@ -87,6 +95,7 @@ impl ObjectKind {
             ObjectKind::Table => ObjectSize::Medium,
             ObjectKind::Wall => ObjectSize::Large,
             ObjectKind::Boulder => ObjectSize::Large,
+            ObjectKind::Corpse(_) => ObjectSize::Small,
             ObjectKind::GenericStructure(_) => ObjectSize::Large,
         }
     }

@@ -1,0 +1,21 @@
+{
+  "task_id": 19,
+  "scope": "Survival Loop: Hunting, Corpses & Butchering",
+  "goal": "Let players injure and kill wildlife via body-part damage, spawn species-specific corpses, and butcher them into meat, hide, and fat using axes/knives.",
+  "decisions": [
+    "On vital-part death, remove the living wildlife entity and place a corpse object at its position, carrying species identity and a simple freshness/rot timer.",
+    "Define per-species yield tables for meat, hide, and fat and keep the first implementation conservative so early kills give modest but meaningful resources.",
+    "Implement butchering as a use pattern (use knife/axe on corpse) that consumes the corpse, grants items, and awards appropriate survival/tailoring skill XP."
+  ],
+  "plan": [
+    "Add a corpse object type with metadata for species and freshness, and update wildlife death handling to spawn corpses when body-part rules say an animal dies.",
+    "Create items for raw_meat variants, raw_hide, and animal_fat, and integrate their weights/descriptions into the existing item registry.",
+    "Implement butchering interactions for axes/knives on corpses, consuming the corpse and yielding species-based resources while updating skills and messages.",
+    "Hook raw meat into the existing cooking flow so players can grill fresh meat over the cabin fire."
+  ],
+  "notes": [
+    "Keep gore-level text mild and reflective to stay aligned with the healing/nature tone even when butchering.",
+    "Future work can extend corpses with more detailed rot stages and scavenger wildlife behavior."
+  ]
+}
+
