@@ -1,0 +1,16 @@
+{
+  "task_id": 4,
+  "scope": "Content: Basic Survival Recipes",
+  "goal": "Provide blueprints for Stone Knife, Campfire, and Cordage (Grass Rope).",
+  "decisions": [
+    "Use the centralized blueprint recipe table to define required materials and time_cost per item.",
+    "Keep recipes lightweight for early-game crafting and align with existing item names."
+  ],
+  "plan": [
+    "Ensure blueprint entries exist for Stone Knife, Campfire, and Cordage with materials and time costs.",
+    "Validate creation and progress reporting uses the shared recipe data."
+  ],
+  "notes": [
+    "Stone Axe remains available as an extra recipe; the three core survival recipes are present in the table."
+  ]
+}

@@ -433,7 +433,29 @@ pub fn try_use(
     state: &mut GameState,
     _map: &WorldMap,
 ) -> InteractionResult {
-    let item = match Item::from_str(item_name) {
+    let item_query = item_name.trim();
+    let item_query_lower = item_query.to_lowercase();
+    let using_hands = matches!(
+        item_query_lower.as_str(),
+        "hand" | "hands" | "fist" | "fists" | "bare hands" | "bare-hands" | "barehand"
+    );
+
+    let target_normalized = target_name.as_ref().map(|s| s.to_lowercase());
+    let target_str = target_normalized.as_deref();
+
+    if using_hands {
+        if let Some(target) = target_str {
+            if target.contains("bush") || target.contains("shrub") || target.contains("ground") {
+                return handle_foraging(state, None);
+            }
+        }
+        return InteractionResult::Failure(
+            "Use what with your hands? Try 'use hands on bush' to forage, or specify a tool and target."
+                .to_string(),
+        );
+    }
+
+    let item = match Item::from_str(item_query) {
         Some(i) => i,
         None => return InteractionResult::Failure(format!("You don't know what '{}' is.", item_name)),
     };
@@ -442,21 +464,21 @@ pub fn try_use(
         return InteractionResult::Failure(format!("You don't have a {}.", item.name()));
     }
 
-    let target_normalized = target_name.as_ref().map(|s| s.to_lowercase());
-    let target_str = target_normalized.as_deref();
-
     // 1. Blueprint Interaction (Building)
-    if let Some(target) = target_str {
-        if target.contains("blueprint") || target.contains("project") {
-            return handle_blueprint_interaction(state, &item);
-        }
+    let target_is_blueprint = target_str
+        .map(|t| t.contains("blueprint") || t.contains("project"))
+        .unwrap_or(false);
+    if target_is_blueprint {
+        return handle_blueprint_interaction(state, &item);
     }
-    // Also check if target is the name of the blueprint item
+    // Also check if target is the name of the blueprint item or if no target is given but material matches
     if let Some(bp) = &state.player.active_project {
-        if let Some(target) = target_str {
-            if bp.target_item.name().to_lowercase().contains(target) {
-                return handle_blueprint_interaction(state, &item);
-            }
+        if target_str
+            .map(|t| bp.target_item.name().to_lowercase().contains(t))
+            .unwrap_or(false)
+            || (target_str.is_none() && bp.required.contains_key(&item))
+        {
+            return handle_blueprint_interaction(state, &item);
         }
     }
 
@@ -473,7 +495,7 @@ pub fn try_use(
              }
         }
         if target.contains("bush") || target.contains("shrub") || target.contains("ground") {
-             return handle_foraging(state, &item);
+             return handle_foraging(state, Some(&item));
         }
     }
 
@@ -484,6 +506,7 @@ pub fn try_use(
                 if state.player.inventory.has(&Item::Log, 1) {
                     state.player.inventory.remove(&Item::Log, 1);
                     state.player.inventory.add(Item::Kindling, 4);
+                    state.player.skills.improve("woodcutting", 2);
                     return InteractionResult::ActionSuccess {
                         message: "You whittle the log down into a pile of fine kindling.".to_string(),
                         time_cost: 2, // 20 mins
@@ -495,6 +518,7 @@ pub fn try_use(
                 if state.player.inventory.has(&Item::Stick, 1) {
                     state.player.inventory.remove(&Item::Stick, 1);
                     state.player.inventory.add(Item::Kindling, 1);
+                    state.player.skills.improve("woodcutting", 1);
                     return InteractionResult::ActionSuccess {
                         message: "You shave the stick into tinder.".to_string(),
                         time_cost: 1,
@@ -543,7 +567,10 @@ pub fn try_use(
         return handle_consumption(state, item);
     }
 
-    InteractionResult::Failure(format!("You can't use the {} that way.", item.name()))
+    InteractionResult::Failure(format!(
+        "You can't use the {} that way. Try patterns like: use axe on tree (gather), use knife on stick (process), or use log on blueprint (build).",
+        item.name()
+    ))
 }
 
 fn handle_blueprint_interaction(state: &mut GameState, item: &Item) -> InteractionResult {
@@ -551,8 +578,15 @@ fn handle_blueprint_interaction(state: &mut GameState, item: &Item) -> Interacti
         if bp.add_material(item.clone()) {
             state.player.inventory.remove(item, 1);
             if !bp.is_complete() {
+                let progress = bp.progress_summary();
                 return InteractionResult::ActionSuccess {
-                    message: format!("You add the {} to the {}. Progress: {}", item.name(), bp.target_item.name(), bp.status_description()),
+                    message: format!(
+                        "You add the {} to the {}. Progress: {}. Total build time: {} mins.",
+                        item.name(),
+                        bp.target_item.name(),
+                        progress,
+                        bp.time_cost
+                    ),
                     time_cost: 1, // 10 mins per action
                     energy_cost: 2.0,
                 };
@@ -575,17 +609,20 @@ fn handle_blueprint_interaction(state: &mut GameState, item: &Item) -> Interacti
             _ => {},
         }
 
+        let time_cost = ((bp.time_cost + 9) / 10).max(1);
+        let energy_cost = (time_cost as f32 * 2.0).max(5.0);
+
         return InteractionResult::ActionSuccess {
             message: format!("You finish crafting the {}. It is ready to use.", bp.target_item.name()),
-            time_cost: 2,
-            energy_cost: 5.0,
+            time_cost,
+            energy_cost,
         };
     }
 
     InteractionResult::Failure("Something went wrong with the blueprint.".to_string())
 }
 
-fn handle_foraging(state: &mut GameState, _tool: &Item) -> InteractionResult {
+fn handle_foraging(state: &mut GameState, tool: Option<&Item>) -> InteractionResult {
     // Basic foraging with hands or knife
     let mut rng = rand::thread_rng();
     let skill = state.player.skills.get("foraging");
@@ -595,8 +632,14 @@ fn handle_foraging(state: &mut GameState, _tool: &Item) -> InteractionResult {
         return InteractionResult::Failure("You are too exhausted to forage.".to_string());
     }
 
+    let tool_bonus = matches!(
+        tool,
+        Some(Item::Knife | Item::StoneKnife | Item::Axe | Item::StoneAxe)
+    );
+    let success_chance = (0.6 + (skill as f64 * 0.005) + if tool_bonus { 0.1 } else { 0.0 }).min(0.95);
+
     // Drops
-    let drops = if rng.gen_bool(0.6 + (skill as f64 * 0.005)) {
+    let drops = if rng.gen_bool(success_chance) {
         // Success
         state.player.inventory.add(Item::Stick, 1);
         if rng.gen_bool(0.3) { state.player.inventory.add(Item::PlantFiber, 1); }
@@ -670,7 +713,14 @@ fn handle_add_fuel(state: &mut GameState, item: Item) -> InteractionResult {
     state.player.inventory.remove(&item, 1);
     if let Some(cabin) = state.cabin_state_mut() {
         if cabin.fireplace.add_fuel_item(item) {
-            return InteractionResult::Success(format!("You add {} to the fire.", item.name()));
+            state.player.skills.improve("fire_making", 1);
+            let time_cost = if matches!(item, Item::Log | Item::Firewood) { 2 } else { 1 };
+            let energy_cost = if matches!(item, Item::Log | Item::Firewood) { 3.0 } else { 1.0 };
+            return InteractionResult::ActionSuccess {
+                message: format!("You add {} to the fire.", item.name()),
+                time_cost,
+                energy_cost,
+            };
         }
     }
     state.player.inventory.add(item, 1);
@@ -680,10 +730,11 @@ fn handle_add_fuel(state: &mut GameState, item: Item) -> InteractionResult {
 fn handle_light_fire(state: &mut GameState) -> InteractionResult {
     if let Some(cabin) = state.cabin_state_mut() {
         if cabin.fireplace.ignite() {
+            state.player.skills.improve("fire_making", 2);
             return InteractionResult::ActionSuccess {
                 message: "You strike a match and the fire catches!".to_string(),
-                time_cost: 0,
-                energy_cost: 0.0,
+                time_cost: 1,
+                energy_cost: 1.0,
             };
         } else {
             return InteractionResult::Failure("You need tinder and fuel to start a fire.".to_string());
@@ -694,13 +745,19 @@ fn handle_light_fire(state: &mut GameState) -> InteractionResult {
 
 fn handle_consumption(state: &mut GameState, item: Item) -> InteractionResult {
     state.player.inventory.remove(&item, 1);
-    match item {
+    let message = match item {
         Item::Apple => {
             state.player.modify_fullness(15.0);
-            InteractionResult::Success("You eat the apple.".to_string())
+            "You eat the apple.".to_string()
         },
         // ... other items
-        _ => InteractionResult::Success(format!("You consume the {}.", item.name()))
+        _ => format!("You consume the {}.", item.name()),
+    };
+
+    InteractionResult::ActionSuccess {
+        message,
+        time_cost: 1,
+        energy_cost: 0.0,
     }
 }
 
@@ -712,11 +769,14 @@ pub fn try_create(item_name: &str, state: &mut GameState) -> InteractionResult {
     };
 
     if let Some(bp) = Blueprint::new(target_item) {
-        state.player.active_project = Some(bp.clone());
+        let progress = bp.progress_summary();
+        let time_cost = bp.time_cost;
+        state.player.active_project = Some(bp);
         InteractionResult::Success(format!(
-            "You lay out plans for a {}. {}", 
-            target_item.name(), 
-            bp.status_description()
+            "You lay out plans for a {}. Requires: {}. Total build time: {} mins.", 
+            target_item.name(),
+            progress,
+            time_cost
         ))
     } else {
         InteractionResult::Failure(format!("You don't know how to craft a {}.", item_name))

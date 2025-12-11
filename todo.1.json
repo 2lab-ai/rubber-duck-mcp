@@ -1,0 +1,19 @@
+{
+  "task_id": 1,
+  "scope": "System Core: Blueprint",
+  "goal": "Finalize the blueprint entity system with reusable recipes and clearer progress reporting.",
+  "decisions": [
+    "Maintain a recipe registry keyed by target_item that includes required materials, starting progress (empty), and time_cost in minutes.",
+    "Blueprint status strings should show per-material progress (current/required) plus the total build time so examine/create surfaces the plan.",
+    "Integrate the improved status helpers with the universal use/create flows while keeping persistence compatible (player.active_project)."
+  ],
+  "plan": [
+    "Define blueprint recipes for survival items (stone knife, stone axe, campfire, cordage) with their time costs.",
+    "Refactor Blueprint construction/status helpers to use the recipe data and expose progress strings.",
+    "Update create/examine/use flows to surface the richer blueprint progress info."
+  ],
+  "notes": [
+    "Blueprints serialize via serde in player.active_project; keep the stored shape stable while adding helper data.",
+    "time_cost is minutes; action ticks are 10 minutes when converting to ActionSuccess."
+  ]
+}

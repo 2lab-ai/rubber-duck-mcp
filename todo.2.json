@@ -1,0 +1,19 @@
+{
+  "task_id": 2,
+  "scope": "Interaction: Universal Use Handler",
+  "goal": "Handle gathering (tool/hands -> resource), processing (tool -> item), and building (material -> blueprint) with clear routing and feedback.",
+  "decisions": [
+    "Support bare-hands foraging alongside tool-based gathering in the universal use command.",
+    "Route building automatically to the active blueprint when the supplied material matches required inputs, even if the target isn't spelled out.",
+    "Return instructive failure messages that hint at the valid use patterns instead of a generic 'can't use' response."
+  ],
+  "plan": [
+    "Add hands-aware handling for foraging targets and keep energy/time costs consistent with other use actions.",
+    "Tighten blueprint routing so materials can be applied to the active project without requiring 'blueprint' in the target.",
+    "Improve the universal use fallback messaging to guide players toward supported patterns."
+  ],
+  "notes": [
+    "Keep the handler single-entry (try_use) but branch by interaction type before failing.",
+    "Action time/energy is already applied via ActionSuccess; reuse that for the new flows."
+  ]
+}

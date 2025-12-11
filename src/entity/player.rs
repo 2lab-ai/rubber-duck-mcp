@@ -1,7 +1,31 @@
+use std::collections::HashMap;
 use serde::{Deserialize, Serialize};
 use crate::world::{Position, Direction};
 use super::objects::Item;
 use super::blueprint::Blueprint;
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct SkillProgress {
+    pub level: u8,
+    pub xp: u32,
+}
+
+impl SkillProgress {
+    pub fn new(level: u8) -> Self {
+        Self { level, xp: 0 }
+    }
+}
+
+const SKILL_IDS: &[&str] = &[
+    "woodcutting",
+    "fire_making",
+    "observation",
+    "foraging",
+    "stonemasonry",
+    "survival",
+    "tailoring",
+    "cooking",
+];
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Skills {
@@ -17,10 +41,16 @@ pub struct Skills {
     pub tailoring: u8,     // 1-100
     #[serde(default)]
     pub cooking: u8,       // 1-100
+    #[serde(default)]
+    pub progress: HashMap<String, SkillProgress>,
 }
 
 impl Skills {
     pub fn new() -> Self {
+        let mut progress = HashMap::new();
+        for id in SKILL_IDS {
+            progress.insert((*id).to_string(), SkillProgress::new(10));
+        }
         Self {
             woodcutting: 10,
             fire_making: 10,
@@ -30,25 +60,29 @@ impl Skills {
             survival: 10,
             tailoring: 10,
             cooking: 10,
+            progress,
         }
     }
 
-    pub fn improve(&mut self, skill: &str, amount: u8) {
-        let skill_ref = match skill {
-            "woodcutting" => &mut self.woodcutting,
-            "fire_making" => &mut self.fire_making,
-            "observation" => &mut self.observation,
-            "foraging" => &mut self.foraging,
-            "stonemasonry" => &mut self.stonemasonry,
-            "survival" => &mut self.survival,
-            "tailoring" => &mut self.tailoring,
-            "cooking" => &mut self.cooking,
-            _ => return,
-        };
-        *skill_ref = (*skill_ref).saturating_add(amount).min(100);
+    fn xp_to_next(level: u8) -> u32 {
+        10 + level as u32 * 5
     }
 
-    pub fn get(&self, skill: &str) -> u8 {
+    fn level_slot(&mut self, skill: &str) -> Option<&mut u8> {
+        match skill {
+            "woodcutting" => Some(&mut self.woodcutting),
+            "fire_making" => Some(&mut self.fire_making),
+            "observation" => Some(&mut self.observation),
+            "foraging" => Some(&mut self.foraging),
+            "stonemasonry" => Some(&mut self.stonemasonry),
+            "survival" => Some(&mut self.survival),
+            "tailoring" => Some(&mut self.tailoring),
+            "cooking" => Some(&mut self.cooking),
+            _ => None,
+        }
+    }
+
+    fn field_level(&self, skill: &str) -> u8 {
         match skill {
             "woodcutting" => self.woodcutting,
             "fire_making" => self.fire_making,
@@ -60,6 +94,38 @@ impl Skills {
             "cooking" => self.cooking,
             _ => 0,
         }
+    }
+
+    fn progress_entry(&mut self, skill: &str) -> Option<&mut SkillProgress> {
+        if !SKILL_IDS.contains(&skill) {
+            return None;
+        }
+        let seed_level = self.field_level(skill);
+        Some(self.progress.entry(skill.to_string()).or_insert_with(|| SkillProgress::new(seed_level)))
+    }
+
+    pub fn improve(&mut self, skill: &str, amount: u8) {
+        let Some(level_after) = ({
+            let Some(progress) = self.progress_entry(skill) else { return; };
+            progress.xp = progress.xp.saturating_add(amount as u32);
+            while progress.xp >= Self::xp_to_next(progress.level) && progress.level < 100 {
+                progress.xp -= Self::xp_to_next(progress.level);
+                progress.level = progress.level.saturating_add(1);
+            }
+            Some(progress.level)
+        }) else {
+            return;
+        };
+        if let Some(level_ref) = self.level_slot(skill) {
+            *level_ref = level_after;
+        }
+    }
+
+    pub fn get(&self, skill: &str) -> u8 {
+        self.progress
+            .get(skill)
+            .map(|p| p.level)
+            .unwrap_or_else(|| self.field_level(skill))
     }
 }
 

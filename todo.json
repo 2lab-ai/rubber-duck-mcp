@@ -11,7 +11,10 @@
         "시야: 대부분의 물체는 바로 한칸 건너에서 볼수 있음. 큰 물체는 두칸 혹은 더 멀리서도 볼 수 있음. 나무는 3칸 건너서 볼 수 있음. 캐빈은 5칸 멀리서도 볼수 있음. 캐빈도 오브젝트임. 모든 건 타일과 오브젝트로 이루어져 있음."
       ],
       "priority": "Critical",
-      "status": "pending"
+      "status": "completed",
+      "progress": [
+        "ObjectRegistry holds per-tile objects (cabin, wood shed, trees, table) with surfaces; visibility scales by size (small/medium 1, large 2, trees 3, cabin 5) and cabin/wood shed bootstrap into the registry."
+      ]
     },
     {
       "id": 1,
@@ -19,7 +22,10 @@
       "title": "Blueprint Entity System",
       "description": "Create 'Blueprint' struct that holds: target_item, required_materials(Map), current_materials(Map), time_cost.",
       "priority": "Critical",
-      "status": "work in progress"
+      "status": "completed",
+      "progress": [
+        "Centralized blueprint recipes (stone knife, stone axe, campfire, cordage) with time costs, added progress summaries, and surfaced detailed status in create/examine/use flows."
+      ]
     },
     {
       "id": 2,
@@ -27,7 +33,10 @@
       "title": "Universal 'Use' Handler",
       "description": "Rewrite 'use' command to handle: Gathering (Tool->Resource), Processing (Tool->Item), and Building (Material->Blueprint).",
       "priority": "Critical",
-      "status": "pending"
+      "status": "completed",
+      "progress": [
+        "Universal use now routes bare-hands foraging, tool gathering, processing, and blueprint building; materials auto-apply to the active project, and failure messages guide valid patterns."
+      ]
     },
     {
       "id": 3,
@@ -35,7 +44,10 @@
       "title": "Skill Manager",
       "description": "Implement Skill struct and XP logic. Map every 'use' action to a specific Skill ID.",
       "priority": "High",
-      "status": "pending"
+      "status": "completed",
+      "progress": [
+        "Added per-skill XP progress with level caps, seeded from existing levels; universal use actions now award XP (foraging, chopping, processing kindling, fire handling, blueprint crafting)."
+      ]
     },
     {
       "id": 4,
@@ -43,7 +55,10 @@
       "title": "Basic Survival Recipes",
       "description": "Implement Blueprints for: Stone Knife, Campfire, Cordage (Grass Rope).",
       "priority": "High",
-      "status": "pending"
+      "status": "completed",
+      "progress": [
+        "Blueprint recipes for stone knife, campfire, and cordage are defined in the shared recipe table with materials and time costs (plus stone axe as an extra early-game recipe)."
+      ]
     },
     {
       "id": 5,
@@ -51,7 +66,22 @@
       "title": "Action Time Cost",
       "description": "Ensure every 'use' action triggers the 'simulate' function to pass time (e.g., 10-30 mins).",
       "priority": "Medium",
-      "status": "pending"
+      "status": "completed",
+      "progress": [
+        "All successful use interactions now advance time and drain energy via ActionSuccess (fueling fires, consuming items, lighting fires), and blueprint assembly uses its configured time_cost."
+      ]
+    },
+    {
+      "id": 6,
+      "title": "books & writing",
+      "description": [
+        "책을 자세히 시스템화 함.",
+        "초기 cabin에 tutorial 책이랑 old book이랑 death note가 있음",
+        "책을 쓰면 책의 타이틀과 몇페이지짜리 책인지 그리고 현재 페이지를 알려줌. 너는 책을 이렇게 읽을 수 있음. 'use 책': 현재 페이지 읽기 처음은 책 표지를 읽는 것. 'use 책 on nextpage' 이러면 책을 다음장으로 넘기고 네가 다시 읽으면 해당 페이지를 읽는거야. 이런식으로 next page, prev page로 책장을 수동으로 넘겨서 읽어야함",
+        "호숫가에 대나무 바이옴을 하나 만들어주고, 그 대나무를 도끼로 베면 대나무를 얻고 그 대나무를 칼로 사용하면 종이를 만들수 있고 종이에 종이를 사용하면 (최소5개) 빈 책을 만들수 있음",
+        "write 제목:xxx on 빈 책",
+        "write 페이지1:yyy on 책(id)"
+      ]
     }
   ]
 }

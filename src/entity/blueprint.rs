@@ -2,6 +2,54 @@ use std::collections::HashMap;
 use serde::{Deserialize, Serialize};
 use crate::entity::Item;
 
+#[derive(Clone, Copy)]
+struct BlueprintRecipe {
+    target_item: Item,
+    required: &'static [(Item, u32)],
+    time_cost: u32, // minutes
+}
+
+const BLUEPRINT_RECIPES: &[BlueprintRecipe] = &[
+    BlueprintRecipe {
+        target_item: Item::StoneKnife,
+        required: &[
+            (Item::SharpStone, 1),
+            (Item::Stick, 1),
+            (Item::PlantFiber, 1),
+        ],
+        time_cost: 30,
+    },
+    BlueprintRecipe {
+        target_item: Item::StoneAxe,
+        required: &[
+            (Item::SharpStone, 1),
+            (Item::Stick, 1),
+            (Item::Cordage, 1),
+        ],
+        time_cost: 40,
+    },
+    BlueprintRecipe {
+        target_item: Item::Campfire,
+        required: &[
+            (Item::Stone, 4),
+            (Item::Kindling, 1),
+            (Item::Log, 2),
+        ],
+        time_cost: 20,
+    },
+    BlueprintRecipe {
+        target_item: Item::Cordage,
+        required: &[
+            (Item::PlantFiber, 3),
+        ],
+        time_cost: 10,
+    },
+];
+
+fn recipe_for(target: Item) -> Option<&'static BlueprintRecipe> {
+    BLUEPRINT_RECIPES.iter().find(|r| r.target_item == target)
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Blueprint {
     pub target_item: Item,
@@ -12,47 +60,15 @@ pub struct Blueprint {
 
 impl Blueprint {
     pub fn new(target: Item) -> Option<Self> {
-        match target {
-            Item::StoneKnife => Some(Blueprint {
-                target_item: Item::StoneKnife,
-                required: HashMap::from([
-                    (Item::SharpStone, 1),
-                    (Item::Stick, 1),
-                    (Item::PlantFiber, 1), // Binding
-                ]),
-                current: HashMap::new(),
-                time_cost: 30,
-            }),
-            Item::StoneAxe => Some(Blueprint {
-                target_item: Item::StoneAxe,
-                required: HashMap::from([
-                    (Item::SharpStone, 1),
-                    (Item::Stick, 1),
-                    (Item::Cordage, 1),
-                ]),
-                current: HashMap::new(),
-                time_cost: 40,
-            }),
-            Item::Campfire => Some(Blueprint {
-                target_item: Item::Campfire,
-                required: HashMap::from([
-                    (Item::Stone, 4),
-                    (Item::Kindling, 1),
-                    (Item::Log, 2),
-                ]),
-                current: HashMap::new(),
-                time_cost: 20,
-            }),
-            Item::Cordage => Some(Blueprint {
-                target_item: Item::Cordage,
-                required: HashMap::from([
-                    (Item::PlantFiber, 3),
-                ]),
-                current: HashMap::new(),
-                time_cost: 10,
-            }),
-            _ => None,
-        }
+        let recipe = recipe_for(target)?;
+        let required: HashMap<Item, u32> = recipe.required.iter().copied().collect();
+
+        Some(Blueprint {
+            target_item: recipe.target_item,
+            required,
+            current: HashMap::new(),
+            time_cost: recipe.time_cost,
+        })
     }
 
     pub fn add_material(&mut self, item: Item) -> bool {
@@ -86,17 +102,37 @@ impl Blueprint {
         }
         missing
     }
+
+    pub fn progress_entries(&self) -> Vec<(Item, u32, u32)> {
+        let mut entries: Vec<(Item, u32, u32)> = self.required.iter()
+            .map(|(item, req)| (*item, *self.current.get(item).unwrap_or(&0), *req))
+            .collect();
+        entries.sort_by_key(|(item, _, _)| item.name());
+        entries
+    }
+
+    pub fn progress_summary(&self) -> String {
+        let parts: Vec<String> = self.progress_entries()
+            .into_iter()
+            .map(|(item, cur, req)| format!("{} {}/{}", item.name(), cur, req))
+            .collect();
+        parts.join(", ")
+    }
     
     pub fn status_description(&self) -> String {
-        let missing = self.missing_materials();
-        if missing.is_empty() {
-            return format!("Blueprint for {} (Ready to assemble)", self.target_item.name());
+        if self.is_complete() {
+            return format!(
+                "Blueprint for {} is ready to assemble. Total build time: {} mins.",
+                self.target_item.name(),
+                self.time_cost
+            );
         }
-        
-        let req_list: Vec<String> = missing.iter()
-            .map(|(item, qty)| format!("{} x{}", item.name(), qty))
-            .collect();
-            
-        format!("Blueprint for {}. Needs: {}", self.target_item.name(), req_list.join(", "))
+
+        format!(
+            "Blueprint for {}. Progress: {}. Total build time: {} mins.",
+            self.target_item.name(),
+            self.progress_summary(),
+            self.time_cost
+        )
     }
 }

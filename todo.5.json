@@ -1,0 +1,20 @@
+{
+  "task_id": 5,
+  "scope": "Realism: Action Time Cost",
+  "goal": "Ensure every 'use' action advances simulation time and drains appropriate energy.",
+  "decisions": [
+    "Treat one action tick as roughly 10 minutes; successful use interactions should return ActionSuccess with a time_cost of at least 1.",
+    "Use the blueprint-defined time_cost for final assembly while keeping per-material contributions lightweight (1 tick).",
+    "Add small time and energy costs for fueling fires and consuming items so every successful use path advances time."
+  ],
+  "plan": [
+    "Audit try_use branches to convert success results into ActionSuccess with non-zero time_cost values.",
+    "Update blueprint completion to consume its configured time_cost when assembling the final item.",
+    "Adjust fire fueling and consumption handlers to spend time and energy and route through ActionSuccess.",
+    "Run cargo tests/checks and update todo.json status to reflect the completed work."
+  ],
+  "notes": [
+    "The universal use command applies time progression via world.tick() for each ActionSuccess time_cost step.",
+    "Energy drain is applied by the MCP server after ActionSuccess; keep energy_cost minimal for small tasks."
+  ]
+}

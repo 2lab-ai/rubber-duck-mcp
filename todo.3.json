@@ -1,0 +1,19 @@
+{
+  "task_id": 3,
+  "scope": "Skills: Manager & XP",
+  "goal": "Add XP tracking per skill and ensure every 'use' action maps to a skill gain.",
+  "decisions": [
+    "Keep existing skill level fields for compatibility but back them with per-skill XP progress data.",
+    "Use simple level-up thresholds (10 + 5 * level) and cap levels at 100.",
+    "Award skill XP on all universal use flows (foraging, chopping, processing, fire handling, blueprint crafting)."
+  ],
+  "plan": [
+    "Add SkillProgress storage and XP helpers while keeping serde compatibility.",
+    "Wire universal use interactions to call improve() for their matching skills.",
+    "Verify builds/tests and update todo.json with progress."
+  ],
+  "notes": [
+    "Progress map seeds from existing level values so old saves stay valid.",
+    "Skill IDs remain string-based and reuse the existing skill names."
+  ]
+}
