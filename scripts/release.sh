@@ -46,7 +46,8 @@ new = "$NEW_VERSION"
 def bump_cargo_toml():
     path = pathlib.Path("Cargo.toml")
     txt = path.read_text()
-    out, n = re.subn(r'(?m)^(version\s*=\s*")([^"]+)(")', rf"\1{new}\3", txt, count=1)
+    def repl(m): return f"{m.group(1)}{new}{m.group(3)}"
+    out, n = re.subn(r'(?m)^(version\s*=\s*")([^"]+)(")', repl, txt, count=1)
     if n == 0:
         sys.exit("Failed to bump Cargo.toml version")
     path.write_text(out)
@@ -54,7 +55,8 @@ def bump_cargo_toml():
 def bump_cargo_lock():
     path = pathlib.Path("Cargo.lock")
     txt = path.read_text()
-    out, n = re.subn(r'(\[\[package\]\]\nname = "rubber-duck-mcp"\nversion = ")([^"]+)(")', rf"\1{new}\3", txt, count=1)
+    def repl(m): return f"{m.group(1)}{new}{m.group(3)}"
+    out, n = re.subn(r'(\[\[package\]\]\nname = "rubber-duck-mcp"\nversion = ")([^"]+)(")', repl, txt, count=1)
     if n == 0:
         sys.exit("Failed to bump Cargo.lock version for rubber-duck-mcp")
     path.write_text(out)
