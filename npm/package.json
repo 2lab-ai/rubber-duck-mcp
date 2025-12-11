@@ -1,6 +1,6 @@
 {
   "name": "@2lab.ai/rubber-duck-mcp",
-  "version": "0.1.12",
+  "version": "0.1.13",
   "description": "Prebuilt MCP server binary wrapper for rubber-duck-mcp",
   "bin": {
     "rubber-duck-mcp": "bin/rubber-duck-mcp.js"
