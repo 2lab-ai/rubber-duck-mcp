@@ -37,6 +37,12 @@ pub enum Item {
     WildHerbs,     // For tea
     Apple,         // Fruit from nearby trees
     Date,          // From oasis
+    Bamboo,        // From bamboo grove
+    Paper,         // Crafted from bamboo
+    BlankBook,     // Unbound/writable book
+    Book,          // Written book
+    TutorialBook,  // Tutorial copy
+    DeathNote,     // Spooky notebook
 
     // Structures / Placeables (as items for blueprint targets)
     Campfire,
@@ -54,7 +60,7 @@ pub enum Item {
     RubberDuck,
 }
 
-const ALL_ITEMS: [Item; 39] = [
+const ALL_ITEMS: [Item; 45] = [
     Item::Axe,
     Item::StoneAxe,
     Item::Knife,
@@ -83,6 +89,12 @@ const ALL_ITEMS: [Item; 39] = [
     Item::WildHerbs,
     Item::Apple,
     Item::Date,
+    Item::Bamboo,
+    Item::Paper,
+    Item::BlankBook,
+    Item::Book,
+    Item::TutorialBook,
+    Item::DeathNote,
     Item::Campfire,
     Item::OldBook,
     Item::StrangeCompass,
@@ -127,6 +139,12 @@ impl Item {
             Item::WildHerbs => "wild herbs",
             Item::Apple => "apple",
             Item::Date => "date",
+            Item::Bamboo => "bamboo",
+            Item::Paper => "paper",
+            Item::BlankBook => "blank book",
+            Item::Book => "book",
+            Item::TutorialBook => "tutorial book",
+            Item::DeathNote => "death note",
             Item::Campfire => "campfire",
             Item::OldBook => "old leather-bound book",
             Item::StrangeCompass => "strange compass",
@@ -171,6 +189,12 @@ impl Item {
             Item::WildHerbs => &["herbs", "wild herbs"],
             Item::Apple => &["fruit", "red apple"],
             Item::Date => &["palm fruit"],
+            Item::Bamboo => &["bamboo stalk", "stalk", "canebamboo"],
+            Item::Paper => &["sheet", "paper sheet"],
+            Item::BlankBook => &["blank book", "empty book", "notebook blank"],
+            Item::Book => &["notebook", "journal", "book"],
+            Item::TutorialBook => &["tutorial", "guide book", "tutorial book"],
+            Item::DeathNote => &["death note", "black notebook", "cursed book"],
             Item::Campfire => &["fire", "fire pit"],
             Item::OldBook => &["book", "old book", "leather-bound book"],
             Item::StrangeCompass => &["compass", "odd compass"],
@@ -217,6 +241,12 @@ impl Item {
             Item::PlantFiber => "Tough plant fibers gathered from bushes.",
             Item::Cordage => "A crude rope braided from plant fibers.",
             Item::Campfire => "A ring of stones with wood, ready to be lit.",
+            Item::Bamboo => "A straight, light bamboo stalk harvested near the lake.",
+            Item::Paper => "A thin sheet of paper made from bamboo pulp.",
+            Item::BlankBook => "A blank book with crisp pages, ready for a title.",
+            Item::Book => "A bound book. Check its ID to read or write pages.",
+            Item::TutorialBook => "A short guide left in the cabin.",
+            Item::DeathNote => "A black notebook with ominous weight.",
             _ => "A useful item.",
         }
     }
@@ -226,6 +256,10 @@ impl Item {
             Item::Log => 5.0,
             Item::Stone => 0.5,
             Item::Axe => 3.0,
+            Item::Bamboo => 1.0,
+            Item::Paper => 0.05,
+            Item::BlankBook => 0.3,
+            Item::Book | Item::TutorialBook | Item::DeathNote | Item::OldBook => 0.4,
             _ => 0.1,
         }
     }
@@ -238,6 +272,8 @@ impl Item {
             Item::Log => Some(60.0),
             Item::Stick => Some(5.0),
             Item::Pinecone => Some(5.0),
+            Item::Bamboo => Some(8.0),
+            Item::Paper => Some(1.0),
             Item::Bark => Some(6.0),
             Item::DryLeaves => Some(3.0),
             Item::Charcoal => Some(40.0),
@@ -259,6 +295,7 @@ impl Item {
                 | Item::Bark
                 | Item::DryLeaves
                 | Item::OldBook
+                | Item::Paper
                 | Item::PlantFiber
         )
     }
@@ -448,6 +485,8 @@ pub struct Cabin {
     pub items: Vec<Item>,
     #[serde(default)]
     pub table_items: Vec<Item>,
+    #[serde(default)]
+    pub book_ids: Vec<String>,
 }
 
 impl Cabin {
@@ -460,6 +499,8 @@ impl Cabin {
                 Item::Kindling,
                 Item::Kindling,
                 Item::OldBook,
+                Item::TutorialBook,
+                Item::DeathNote,
                 Item::StrangeCompass,
                 Item::AncientMap,
                 Item::TeaCup,
@@ -468,6 +509,7 @@ impl Cabin {
                 Item::WildHerbs,
             ],
             table_items: vec![Item::RubberDuck],
+            book_ids: Vec::new(),
         }
     }
 

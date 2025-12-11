@@ -70,6 +70,7 @@ impl ObjectKind {
                 TreeType::Pine => "pine tree".to_string(),
                 TreeType::Birch => "birch tree".to_string(),
                 TreeType::Apple => "apple tree".to_string(),
+                TreeType::Bamboo => "bamboo grove".to_string(),
             },
             ObjectKind::Table => "table".to_string(),
             ObjectKind::Wall => "wall".to_string(),

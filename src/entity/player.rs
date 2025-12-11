@@ -265,6 +265,10 @@ pub struct Player {
     // Crafting
     #[serde(default)]
     pub active_project: Option<Blueprint>,
+    #[serde(default)]
+    pub book_ids: Vec<String>,
+    #[serde(default)]
+    pub book_progress: HashMap<String, usize>,
 }
 
 impl Player {
@@ -284,6 +288,8 @@ impl Player {
             skills: Skills::new(),
             inventory: Inventory::new(),
             active_project: None,
+            book_ids: Vec::new(),
+            book_progress: HashMap::new(),
         }
     }
 

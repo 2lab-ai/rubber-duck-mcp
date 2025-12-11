@@ -130,6 +130,24 @@ pub fn get_tool_definitions() -> Vec<ToolDefinition> {
             }),
         },
         ToolDefinition {
+            name: "write".to_string(),
+            description: "Write a title or page in a book. Examples: write 제목:My Journal on 빈 책, write 페이지1:Hello on book-3.".to_string(),
+            input_schema: json!({
+                "type": "object",
+                "properties": {
+                    "text": {
+                        "type": "string",
+                        "description": "Text to write, starting with 제목: or 페이지<number>:"
+                    },
+                    "target": {
+                        "type": "string",
+                        "description": "Target book or blank book (e.g., '빈 책' or 'book-3')"
+                    }
+                },
+                "required": ["text", "target"]
+            }),
+        },
+        ToolDefinition {
             name: "open".to_string(),
             description: "Open a door or container.".to_string(),
             input_schema: json!({

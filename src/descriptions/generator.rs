@@ -55,6 +55,19 @@ fn ambient_sounds(biome: Biome, weather: Weather, time: TimeOfDay) -> Vec<&'stat
                 }
             }
         }
+        Biome::BambooGrove => {
+            match time {
+                TimeOfDay::Dawn | TimeOfDay::Morning => {
+                    sounds.push("Bamboo leaves whisper as the breeze stirs the grove.");
+                }
+                TimeOfDay::Noon | TimeOfDay::Afternoon => {
+                    sounds.push("The bamboo clacks softly, stalks swaying together.");
+                }
+                TimeOfDay::Evening | TimeOfDay::Dusk | TimeOfDay::Night | TimeOfDay::Midnight => {
+                    sounds.push("Crickets trill between the slender bamboo stalks.");
+                }
+            }
+        }
         Biome::Desert | Biome::Oasis => {
             match time {
                 TimeOfDay::Night | TimeOfDay::Midnight | TimeOfDay::Evening => {
@@ -303,6 +316,11 @@ impl DescriptionGenerator {
             Biome::MixedForest => {
                 "You stand in a mixed woodland of oak, maple, and pine. Shafts of light filter \
                 through the canopy, dappling the leaf-covered ground. Birdsong echoes through the trees."
+                    .to_string()
+            }
+            Biome::BambooGrove => {
+                "Slender bamboo rises around you in straight green columns. Leaves clatter in the breeze, \
+                and fallen sheaths crunch softly underfoot. The nearby lake cools the air."
                     .to_string()
             }
             Biome::Path => {
@@ -589,6 +607,7 @@ impl DescriptionGenerator {
                         TreeType::Pine => "tall pine",
                         TreeType::Birch => "slender birch",
                         TreeType::Apple => "sturdy apple tree",
+                        TreeType::Bamboo => "cluster of bamboo",
                     });
                     desc.push('.');
                 }
@@ -652,6 +671,8 @@ impl DescriptionGenerator {
                 "Snow-laden evergreens stand in silent rows, a winter wonderland.".to_string(),
             Biome::MixedForest =>
                 "Mixed woodland extends as far as you can see.".to_string(),
+            Biome::BambooGrove =>
+                "A compact bamboo grove nods in the breeze near the lakeshore.".to_string(),
             Biome::Lake =>
                 "The lake's waters lap gently at the shore.".to_string(),
             Biome::Path =>

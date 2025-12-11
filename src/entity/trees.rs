@@ -8,6 +8,7 @@ pub enum TreeType {
     Pine,
     Birch,
     Apple,
+    Bamboo,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -52,6 +53,7 @@ impl Tree {
             TreeType::Pine => "A tall pine stands here, sap-heavy and straight.",
             TreeType::Birch => "A slender birch with pale bark and delicate branches.",
             TreeType::Apple => "A hardy apple tree, its branches often heavy with fruit.",
+            TreeType::Bamboo => "A cluster of bamboo stalks sways softly in the breeze.",
         }
     }
 
@@ -94,6 +96,9 @@ impl Tree {
         };
         if self.hits_required == 0 {
             self.hits_required = 5;
+        }
+        if let TreeType::Bamboo = self.kind {
+            self.hits_required = 3;
         }
         if self.fruit_count > self.fruit_max {
             self.fruit_count = self.fruit_max;

@@ -1,5 +1,5 @@
 use rand::Rng;
-use crate::entity::{Room, Item, Blueprint};
+use crate::entity::{Room, Item, Blueprint, BookEntry};
 use crate::world::WorldMap;
 use crate::persistence::GameState;
 
@@ -206,6 +206,7 @@ pub fn try_take(item_name: &str, state: &mut GameState, map: &mut WorldMap) -> I
             }
             if from_cabin_floor {
                 if state.player.inventory.add(item.clone(), 1) {
+                    state.on_player_pickup(&item);
                     return InteractionResult::ItemObtained(item.clone(), format!("You pick up the {}.", item.name()));
                 } else {
                     if let Some(cabin) = state.cabin_state_mut() {
@@ -217,6 +218,7 @@ pub fn try_take(item_name: &str, state: &mut GameState, map: &mut WorldMap) -> I
 
             if state.take_table_item(&item) {
                 if state.player.inventory.add(item.clone(), 1) {
+                    state.on_player_pickup(&item);
                     return InteractionResult::ItemObtained(item.clone(), format!("You lift the {} from the table.", item.name()));
                 } else {
                     state.add_table_item(item.clone());
@@ -234,6 +236,7 @@ pub fn try_take(item_name: &str, state: &mut GameState, map: &mut WorldMap) -> I
                     }
                 }
                 if took && state.player.inventory.add(Item::Matchbox, 1) {
+                    state.on_player_pickup(&Item::Matchbox);
                     return InteractionResult::ItemObtained(Item::Matchbox, "You take the matchbox from the mantelpiece.".to_string());
                 } else if took {
                     if let Some(cabin) = state.cabin_state_mut() {
@@ -256,6 +259,7 @@ pub fn try_take(item_name: &str, state: &mut GameState, map: &mut WorldMap) -> I
                 }
                 if picked_up {
                     if state.player.inventory.add(Item::Axe, 1) {
+                        state.on_player_pickup(&Item::Axe);
                         return InteractionResult::ItemObtained(Item::Axe, "You pick up the heavy axe.".to_string());
                     } else {
                         if let Some(wood_shed) = state.wood_shed_state_mut() {
@@ -278,6 +282,7 @@ pub fn try_take(item_name: &str, state: &mut GameState, map: &mut WorldMap) -> I
                 }
                 if took_log {
                     if state.player.inventory.add(Item::Log, 1) {
+                        state.on_player_pickup(&Item::Log);
                         let remaining = state.wood_shed_state().map(|w| w.logs).unwrap_or(0);
                         return InteractionResult::ItemObtained(Item::Log, format!("You heft a heavy log. {} remain.", remaining));
                     } else {
@@ -301,6 +306,7 @@ pub fn try_take(item_name: &str, state: &mut GameState, map: &mut WorldMap) -> I
                 }
                 if took_firewood {
                     if state.player.inventory.add(Item::Firewood, 1) {
+                        state.on_player_pickup(&Item::Firewood);
                         return InteractionResult::ItemObtained(Item::Firewood, "You gather a piece of split firewood.".to_string());
                     } else {
                         if let Some(wood_shed) = state.wood_shed_state_mut() {
@@ -317,6 +323,7 @@ pub fn try_take(item_name: &str, state: &mut GameState, map: &mut WorldMap) -> I
                 if let Some(tile) = map.get_tile_mut(r, c) {
                     if tile.items.take(&item) {
                         if state.player.inventory.add(item.clone(), 1) {
+                            state.on_player_pickup(&item);
                             return InteractionResult::ItemObtained(item.clone(), format!("You pick up the {}.", item.name()));
                         } else {
                             tile.items.add(item.clone(), 1); // Put it back
@@ -340,10 +347,14 @@ pub fn try_drop(item_name: &str, state: &mut GameState) -> InteractionResult {
         return InteractionResult::Failure(format!("You don't have any {}.", item.name()));
     }
     state.player.inventory.remove(&item, 1);
+    let dropped_book_id = state.on_player_drop(&item);
     match &state.player.room {
         Some(Room::CabinMain) => {
             if let Some(cabin) = state.cabin_state_mut() {
                 cabin.add_item(item.clone());
+            }
+            if let Some(id) = dropped_book_id {
+                state.add_cabin_book(id);
             }
         }
         Some(Room::WoodShed) => {
@@ -371,6 +382,12 @@ pub fn examine(target: &str, state: &GameState) -> String {
             return bp.status_description();
         } else {
             return "You don't have any active blueprint. Use 'create [item]' to start one.".to_string();
+        }
+    }
+
+    if normalized.contains("book") || normalized.contains("note") || normalized.contains("책") {
+        if let Some(book) = state.accessible_book(&normalized) {
+            return book.full_text();
         }
     }
 
@@ -460,8 +477,29 @@ pub fn try_use(
         None => return InteractionResult::Failure(format!("You don't know what '{}' is.", item_name)),
     };
 
-    if !state.player.inventory.has(&item, 1) {
+    let mut has_item = state.player.inventory.has(&item, 1);
+    if !has_item
+        && matches!(item, Item::Book | Item::TutorialBook | Item::OldBook | Item::DeathNote | Item::BlankBook)
+        && matches!(state.player.room, Some(Room::CabinMain))
+    {
+        if let Some(cabin) = state.cabin_state() {
+            let id_match = state
+                .book_id_for_item(&item)
+                .map(|bid| cabin.book_ids.iter().any(|b| b == bid))
+                .unwrap_or(false);
+            has_item = cabin.items.contains(&item) || cabin.table_items.contains(&item) || id_match;
+        }
+    }
+
+    if !has_item {
         return InteractionResult::Failure(format!("You don't have a {}.", item.name()));
+    }
+
+    if matches!(item, Item::Book | Item::TutorialBook | Item::OldBook | Item::DeathNote) {
+        return handle_book_use(state, &item, target_str);
+    }
+    if item == Item::BlankBook {
+        return InteractionResult::Failure("It's a blank book. Title it first with 'write 제목:<title> on 빈 책'.".to_string());
     }
 
     // 1. Blueprint Interaction (Building)
@@ -484,6 +522,11 @@ pub fn try_use(
 
     // 2. Resource Gathering (Chopping, etc)
     if let Some(target) = target_str {
+        if target.contains("bamboo") {
+            if item == Item::Axe || item == Item::StoneAxe {
+                return try_chop_tree(state, _map);
+            }
+        }
         if target.contains("tree") || target.contains("wood") || target.contains("log") {
              if item == Item::Axe || item == Item::StoneAxe {
                  // Check if it's chopping block or standing tree
@@ -526,6 +569,20 @@ pub fn try_use(
                     };
                 }
             }
+            if target.contains("bamboo") {
+                if state.player.inventory.has(&Item::Bamboo, 1) {
+                    state.player.inventory.remove(&Item::Bamboo, 1);
+                    state.player.inventory.add(Item::Paper, 3);
+                    state.player.skills.improve("tailoring", 2);
+                    return InteractionResult::ActionSuccess {
+                        message: "You split the bamboo and press it into thin sheets of paper.".to_string(),
+                        time_cost: 2,
+                        energy_cost: 6.0,
+                    };
+                } else {
+                    return InteractionResult::Failure("You need bamboo in your inventory to cut into paper.".to_string());
+                }
+            }
         }
     }
     
@@ -546,6 +603,22 @@ pub fn try_use(
                     return InteractionResult::Failure("You need another stone to knap against.".to_string());
                 }
             }
+        }
+    }
+
+    // Paper on paper -> Blank Book
+    if item == Item::Paper {
+        if state.player.inventory.count(&Item::Paper) >= 5 {
+            state.player.inventory.remove(&Item::Paper, 5);
+            state.player.inventory.add(Item::BlankBook, 1);
+            state.player.skills.improve("tailoring", 1);
+            return InteractionResult::ActionSuccess {
+                message: "You fold and bind the sheets into a blank book. Try 'write 제목:... on 빈 책' to title it.".to_string(),
+                time_cost: 2,
+                energy_cost: 3.0,
+            };
+        } else {
+            return InteractionResult::Failure("You need at least 5 sheets of paper to bind a blank book.".to_string());
         }
     }
 
@@ -571,6 +644,85 @@ pub fn try_use(
         "You can't use the {} that way. Try patterns like: use axe on tree (gather), use knife on stick (process), or use log on blueprint (build).",
         item.name()
     ))
+}
+
+fn parse_book_id_from_target(target: Option<&str>) -> Option<String> {
+    let target = target?.trim();
+    if target.is_empty() {
+        return None;
+    }
+    if let Some(start) = target.find('(') {
+        if let Some(end_rel) = target[start + 1..].find(')') {
+            return Some(target[start + 1..start + 1 + end_rel].trim().to_string());
+        }
+    }
+    Some(target.to_string())
+}
+
+fn handle_book_use(state: &mut GameState, item: &Item, target: Option<&str>) -> InteractionResult {
+    let id_from_item = state.book_id_for_item(item).map(|s| s.to_string());
+    let mut accessible_ids = state.accessible_book_ids();
+    let book_id = if let Some(id) = id_from_item {
+        id
+    } else if let Some(id) = parse_book_id_from_target(target) {
+        id
+    } else if accessible_ids.len() == 1 {
+        accessible_ids.pop().unwrap()
+    } else {
+        accessible_ids.sort();
+        let listing = if accessible_ids.is_empty() {
+            "No book IDs available. Bind a blank book first with 'write 제목:<title> on 빈 책'.".to_string()
+        } else {
+            format!("Specify which book to read. Available: {}", accessible_ids.join(", "))
+        };
+        return InteractionResult::Failure(listing);
+    };
+
+    if !state.player_or_cabin_has_book(&book_id) {
+        return InteractionResult::Failure("You need to hold that book (or be next to it in the cabin).".to_string());
+    }
+
+    let Some(book) = state.books.get(&book_id) else {
+        return InteractionResult::Failure("That book doesn't seem to exist.".to_string());
+    };
+    let title = book.title.clone();
+    let total_pages = book.pages.len();
+    let pages_copy = book.pages.clone();
+    let book_label = book.id.clone();
+
+    let mut page = state.book_page(&book_id);
+    if let Some(t) = target {
+        let lower = t.to_lowercase();
+        if lower.contains("next") {
+            page = page.saturating_add(1);
+        } else if lower.contains("prev") || lower.contains("previous") {
+            page = page.saturating_sub(1);
+        }
+    }
+
+    let max_page = book.pages.len();
+    if page > max_page {
+        page = max_page;
+    }
+    state.set_book_page(&book_id, page);
+
+    let message = if page == 0 {
+        format!(
+            "{} [{}] — cover page. Total pages: {}. Use 'use {} on nextpage' to turn pages.",
+            title,
+            book_label,
+            total_pages,
+            item.name()
+        )
+    } else {
+        let content = pages_copy
+            .get(page - 1)
+            .map(|s| s.as_str())
+            .unwrap_or("This page is blank.");
+        format!("{} [{}] — Page {}: {}", title, book_label, page, content)
+    };
+
+    InteractionResult::Success(message)
 }
 
 fn handle_blueprint_interaction(state: &mut GameState, item: &Item) -> InteractionResult {
@@ -696,6 +848,17 @@ fn try_chop_tree(state: &mut GameState, _map: &WorldMap) -> InteractionResult {
         return InteractionResult::Failure("This tree has already been felled.".to_string());
     }
 
+    if matches!(tree.kind, crate::entity::TreeType::Bamboo) {
+        tree.felled = true;
+        state.player.inventory.add(Item::Bamboo, 2);
+        state.player.skills.improve("woodcutting", 3);
+        return InteractionResult::ActionSuccess {
+            message: "You slice through the bamboo. The stalks fall neatly.".to_string(),
+            time_cost: 2,
+            energy_cost: 10.0,
+        };
+    }
+
     tree.felled = true;
     state.player.inventory.add(Item::Log, 2);
     state.player.inventory.add(Item::Kindling, 1);
@@ -780,5 +943,91 @@ pub fn try_create(item_name: &str, state: &mut GameState) -> InteractionResult {
         ))
     } else {
         InteractionResult::Failure(format!("You don't know how to craft a {}.", item_name))
+    }
+}
+
+pub fn write_on_book(text: &str, target: &str, state: &mut GameState) -> InteractionResult {
+    let content = text.trim();
+    if content.is_empty() {
+        return InteractionResult::Failure("Provide text to write, e.g., 'write 제목:My Book on 빈 책' or 'write 페이지1:Hello on book-3'.".to_string());
+    }
+
+    let lower = content.to_lowercase();
+    let is_title = lower.starts_with("제목:") || lower.starts_with("title:");
+    let is_page = lower.starts_with("페이지") || lower.starts_with("page");
+
+    if is_title {
+        let title = content.split_once(':').map(|(_, t)| t.trim()).unwrap_or("").to_string();
+        if title.is_empty() {
+            return InteractionResult::Failure("Please provide a title after '제목:' or 'title:'.".to_string());
+        }
+        if !state.player.inventory.has(&Item::BlankBook, 1) {
+            return InteractionResult::Failure("You need a blank book to bind a title.".to_string());
+        }
+        state.player.inventory.remove(&Item::BlankBook, 1);
+        state.player.inventory.add(Item::Book, 1);
+        let id = state.generate_book_id();
+        let entry = BookEntry::new(id.clone(), title, true);
+        state.register_book(entry);
+        state.add_player_book(&id);
+        return InteractionResult::ActionSuccess {
+            message: format!("You title the book and bind it. Book ID: {}.", id),
+            time_cost: 1,
+            energy_cost: 1.0,
+        };
+    }
+
+    if !is_page {
+        return InteractionResult::Failure("Unsupported write format. Use '제목:<title>' for blank books or '페이지<number>:<text>' for existing books.".to_string());
+    }
+
+    let (page_spec, body) = match content.split_once(':') {
+        Some(parts) => parts,
+        None => return InteractionResult::Failure("Use '페이지<number>:<text>' to write a page.".to_string()),
+    };
+
+    let digits: String = page_spec.chars().filter(|c| c.is_ascii_digit()).collect();
+    let page_num: usize = digits.parse().unwrap_or(0);
+    if page_num == 0 {
+        return InteractionResult::Failure("Specify a page number like 페이지1 or page2.".to_string());
+    }
+
+    let book_id = {
+        if let Some(start) = target.find('(') {
+            if let Some(end) = target[start + 1..].find(')') {
+                target[start + 1..start + 1 + end].trim().to_string()
+            } else {
+                target.trim().to_string()
+            }
+        } else {
+            target.trim().to_string()
+        }
+    };
+
+    if book_id.is_empty() {
+        return InteractionResult::Failure("Please specify which book to write in (e.g., on book-3).".to_string());
+    }
+
+    let book_in_cabin = matches!(state.player.room, Some(Room::CabinMain))
+        && state
+            .cabin_state()
+            .map(|c| c.book_ids.iter().any(|b| b == &book_id))
+            .unwrap_or(false);
+    if !state.player_has_book(&book_id) && !book_in_cabin {
+        return InteractionResult::Failure("You need to hold the book (or be next to it in the cabin) to write in it.".to_string());
+    }
+
+    let Some(book) = state.book_entry_mut(&book_id) else {
+        return InteractionResult::Failure("That book ID doesn't exist.".to_string());
+    };
+    if !book.writable {
+        return InteractionResult::Failure("This book cannot be written in.".to_string());
+    }
+
+    book.set_page(page_num - 1, body.trim());
+    InteractionResult::ActionSuccess {
+        message: format!("You write on page {} of {} ({})", page_num, book.title, book.id),
+        time_cost: 1,
+        energy_cost: 1.0,
     }
 }

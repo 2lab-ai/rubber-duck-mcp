@@ -709,6 +709,14 @@ fn try_chop_tree(
                 rng.gen_range(1..=2),
                 rng.gen_range(1..=3),
             ),
+            TreeType::Bamboo => (
+                0,
+                0,
+                0,
+                0,
+                rng.gen_range(1..=2),
+                rng.gen_range(1..=2),
+            ),
         };
 
         let mut carried = Vec::new();
@@ -761,12 +769,18 @@ fn try_chop_tree(
             }
         }
 
+        if matches!(tree.kind, TreeType::Bamboo) {
+            add_or_stash(Item::Bamboo, rng.gen_range(2..=4));
+            return CraftResult::Success("With a final swing, the bamboo stalks topple.".to_string());
+        }
+
         let mut summary = format!(
             "With a final swing, the {} creaks and crashes down. You gain {} logs and {} bundles of kindling.",
             match tree.kind {
                 TreeType::Pine => "pine tree",
                 TreeType::Birch => "birch tree",
                 TreeType::Apple => "apple tree",
+                TreeType::Bamboo => "bamboo stand",
             },
             logs,
             kindling

@@ -87,6 +87,9 @@ impl Weather {
             Biome::Lake => vec![
                 Weather::Clear, Weather::Cloudy, Weather::Fog,
             ],
+            Biome::BambooGrove => vec![
+                Weather::Clear, Weather::Cloudy, Weather::Fog, Weather::LightRain,
+            ],
             Biome::MixedForest | Biome::Path => vec![
                 Weather::Clear, Weather::Cloudy, Weather::Overcast,
                 Weather::LightRain, Weather::Fog,

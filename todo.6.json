@@ -1,0 +1,19 @@
+{
+  "task_id": 6,
+  "scope": "Content: Books & Writing",
+  "goal": "Systemize books with initial cabin books, bamboo→paper→blank book crafting, and writing commands for titles/pages.",
+  "decisions": [
+    "Introduce a persistent book registry with unique IDs, seeded with tutorial, old book, and death note entries stored in the cabin.",
+    "Use bamboo (axe) → paper (knife) → blank book (5x paper) as the crafting chain, then bind a blank book by writing a title to create a writable book entry with an ID.",
+    "Provide a write command to set a title on a blank book and add/edit pages on owned books by ID; expose book info via examine."
+  ],
+  "plan": [
+    "Add book data structures, items, and ownership tracking (player/cabin) plus initial seeded books and bamboo grove spawning.",
+    "Implement bamboo chopping, paper crafting, blank book binding, and book creation from blank book via writing a title.",
+    "Add write/read flows (title/page writing, examine output), tool wiring, and update todo.json plus tests."
+  ],
+  "notes": [
+    "Keep serialization backward compatible with defaults for new fields.",
+    "Use ActionSuccess to advance time/energy for writing and crafting steps."
+  ]
+}

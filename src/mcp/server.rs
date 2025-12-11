@@ -135,6 +135,7 @@ impl McpServer {
             "drop" => self.cmd_drop(args),
             "use" => self.cmd_use(args),
             "create" => self.cmd_create(args),
+            "write" => self.cmd_write(args),
             "open" => self.cmd_open(args),
             "close" => self.cmd_close(args),
             "inventory" => self.cmd_inventory(args),
@@ -439,6 +440,33 @@ impl McpServer {
         }
     }
 
+    fn cmd_write(&mut self, args: &Option<Value>) -> CallToolResult {
+        let text = match get_string_arg(args, "text") {
+            Some(t) => t,
+            None => return CallToolResult::error("Please provide text to write (제목: or 페이지N:).".to_string()),
+        };
+        let target = match get_string_arg(args, "target") {
+            Some(t) => t,
+            None => return CallToolResult::error("Please specify a target book (e.g., '빈 책' or 'book-1').".to_string()),
+        };
+
+        let result = write_on_book(&text, &target, &mut self.world.state);
+
+        match result {
+            InteractionResult::Success(msg) => CallToolResult::text(msg),
+            InteractionResult::Failure(msg) => CallToolResult::text(msg),
+            InteractionResult::ActionSuccess { message, time_cost, energy_cost } => {
+                for _ in 0..time_cost {
+                    self.world.tick();
+                }
+                self.world.state.player.modify_energy(-energy_cost);
+                let time_str = if time_cost > 0 { format!(" (took {} mins)", time_cost * 10) } else { "".to_string() };
+                CallToolResult::text(format!("{}{}", message, time_str))
+            }
+            _ => CallToolResult::error("Unexpected result".to_string()),
+        }
+    }
+
     fn cmd_open(&mut self, args: &Option<Value>) -> CallToolResult {
         let target = match get_string_arg(args, "target") {
             Some(t) => t,
@@ -492,6 +520,17 @@ impl McpServer {
         // Show active project if any
         if let Some(bp) = &self.world.state.player.active_project {
             text.push_str(&format!("\n**Active Project:**\n- {}\n", bp.status_description()));
+        }
+
+        if !self.world.state.player.book_ids.is_empty() {
+            text.push_str("\n**Books:**\n");
+            for id in &self.world.state.player.book_ids {
+                if let Some(book) = self.world.state.books.get(id) {
+                    text.push_str(&format!("- {} ({})\n", book.title, book.id));
+                } else {
+                    text.push_str(&format!("- {}\n", id));
+                }
+            }
         }
 
         let weight = self.world.state.player.inventory.current_weight();

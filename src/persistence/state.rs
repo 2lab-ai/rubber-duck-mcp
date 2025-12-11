@@ -7,6 +7,10 @@ use crate::world::*;
 use crate::entity::*;
 use rand::Rng;
 
+const TUTORIAL_BOOK_ID: &str = "book-tutorial";
+const OLD_BOOK_ID: &str = "book-old";
+const DEATH_NOTE_ID: &str = "book-death-note";
+
 /// The complete game state that gets saved/loaded
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct GameState {
@@ -19,6 +23,10 @@ pub struct GameState {
     pub objects: ObjectRegistry,
     #[serde(default)]
     pub custom_names: HashMap<Item, String>,
+    #[serde(default = "GameState::default_books")]
+    pub books: HashMap<String, BookEntry>,
+    #[serde(default = "GameState::default_next_book_id")]
+    pub next_book_id: u32,
     // Runtime state (not critical to save but nice to have)
     #[serde(default)]
     pub pending_messages: Vec<String>,
@@ -34,6 +42,14 @@ pub struct GameState {
 }
 
 impl GameState {
+    pub fn default_books() -> HashMap<String, BookEntry> {
+        HashMap::new()
+    }
+
+    pub fn default_next_book_id() -> u32 {
+        1
+    }
+
     pub fn cabin_state(&self) -> Option<&Cabin> {
         self.objects
             .find("cabin")
@@ -136,6 +152,218 @@ impl GameState {
         }
     }
 
+    fn ensure_book_registry(&mut self) {
+        let mut insert_if_missing = |id: &str, title: &str, pages: Vec<&str>, writable: bool| {
+            if !self.books.contains_key(id) {
+                self.books.insert(
+                    id.to_string(),
+                    BookEntry {
+                        id: id.to_string(),
+                        title: title.to_string(),
+                        pages: pages.into_iter().map(|p| p.to_string()).collect(),
+                        writable,
+                    },
+                );
+            }
+        };
+
+        insert_if_missing(
+            TUTORIAL_BOOK_ID,
+            "Cabin Tutorial",
+            vec![
+                "Welcome. Use 'use hands on bush' to forage, 'create campfire' to plan a fire, and 'use log on blueprint' to build.",
+                "Write a title on a blank book: write 제목:My Journal on 빈 책. Then write pages: write 페이지1:Hello on book-{id}.",
+            ],
+            false,
+        );
+        insert_if_missing(
+            OLD_BOOK_ID,
+            "Weathered Journal",
+            vec![
+                "The cabin creaks but endures. The lake stays still even in wind.",
+                "Someone underlined a phrase: 'Keep writing; the ink remembers what you might forget.'",
+            ],
+            false,
+        );
+        insert_if_missing(
+            DEATH_NOTE_ID,
+            "Death Note",
+            vec!["The human whose name is written in this note shall die."],
+            true,
+        );
+
+        let max_seen = self
+            .books
+            .keys()
+            .filter_map(|k| k.strip_prefix("book-"))
+            .filter_map(|n| n.parse::<u32>().ok())
+            .max()
+            .unwrap_or(0);
+        if self.next_book_id <= max_seen {
+            self.next_book_id = max_seen + 1;
+        }
+    }
+
+    fn ensure_cabin_books(&mut self) {
+        let Some(cabin) = self.cabin_state_mut() else { return; };
+        let ensure = |cabin: &mut Cabin, id: &str, item: Item| {
+            if !cabin.book_ids.iter().any(|b| b == id) {
+                cabin.book_ids.push(id.to_string());
+            }
+            if !cabin.items.contains(&item) {
+                cabin.items.push(item);
+            }
+        };
+        ensure(cabin, TUTORIAL_BOOK_ID, Item::TutorialBook);
+        ensure(cabin, OLD_BOOK_ID, Item::OldBook);
+        ensure(cabin, DEATH_NOTE_ID, Item::DeathNote);
+    }
+
+    pub fn generate_book_id(&mut self) -> String {
+        let id = format!("book-{}", self.next_book_id);
+        self.next_book_id += 1;
+        id
+    }
+
+    pub fn book_entry(&self, id: &str) -> Option<&BookEntry> {
+        self.books.get(id)
+    }
+
+    pub fn book_entry_mut(&mut self, id: &str) -> Option<&mut BookEntry> {
+        self.books.get_mut(id)
+    }
+
+    pub fn register_book(&mut self, entry: BookEntry) -> String {
+        let id = entry.id.clone();
+        self.books.insert(id.clone(), entry);
+        id
+    }
+
+    pub fn player_has_book(&self, id: &str) -> bool {
+        self.player.book_ids.iter().any(|b| b == id)
+    }
+
+    pub fn add_player_book(&mut self, id: &str) {
+        if !self.player.book_ids.iter().any(|b| b == id) {
+            self.player.book_ids.push(id.to_string());
+        }
+    }
+
+    pub fn remove_player_book(&mut self, id: &str) -> bool {
+        if let Some(pos) = self.player.book_ids.iter().position(|b| b == id) {
+            self.player.book_ids.remove(pos);
+            return true;
+        }
+        false
+    }
+
+    pub fn pop_any_player_book(&mut self) -> Option<String> {
+        self.player.book_ids.pop()
+    }
+
+    pub fn book_id_for_item<'a>(&self, item: &'a Item) -> Option<&'a str> {
+        match item {
+            Item::TutorialBook => Some(TUTORIAL_BOOK_ID),
+            Item::OldBook => Some(OLD_BOOK_ID),
+            Item::DeathNote => Some(DEATH_NOTE_ID),
+            _ => None,
+        }
+    }
+
+    pub fn take_cabin_book_for_item(&mut self, item: &Item) -> Option<String> {
+        let id_hint = self.book_id_for_item(item).map(|s| s.to_string());
+        let Some(cabin) = self.cabin_state_mut() else { return None; };
+        if let Some(id) = id_hint {
+            if let Some(pos) = cabin.book_ids.iter().position(|b| b == &id) {
+                return Some(cabin.book_ids.remove(pos));
+            }
+        }
+        if matches!(item, Item::Book) {
+            return cabin.book_ids.pop();
+        }
+        None
+    }
+
+    pub fn add_cabin_book(&mut self, id: String) {
+        if let Some(cabin) = self.cabin_state_mut() {
+            if !cabin.book_ids.iter().any(|b| b == &id) {
+                cabin.book_ids.push(id);
+            }
+        }
+    }
+
+    pub fn accessible_book(&self, query: &str) -> Option<&BookEntry> {
+        let q = query.to_lowercase();
+        let mut ids_to_check: Vec<String> = self.player.book_ids.clone();
+        if matches!(self.player.room, Some(Room::CabinMain)) {
+            if let Some(cabin) = self.cabin_state() {
+                ids_to_check.extend(cabin.book_ids.clone());
+            }
+        }
+        for id in ids_to_check {
+            if let Some(book) = self.books.get(&id) {
+                if book.id.to_lowercase().contains(&q) || book.title.to_lowercase().contains(&q) {
+                    return Some(book);
+                }
+            }
+        }
+        None
+    }
+
+    pub fn accessible_book_ids(&self) -> Vec<String> {
+        let mut ids = self.player.book_ids.clone();
+        if matches!(self.player.room, Some(Room::CabinMain)) {
+            if let Some(cabin) = self.cabin_state() {
+                ids.extend(cabin.book_ids.clone());
+            }
+        }
+        ids
+    }
+
+    pub fn player_or_cabin_has_book(&self, id: &str) -> bool {
+        self.player.book_ids.iter().any(|b| b == id)
+            || (matches!(self.player.room, Some(Room::CabinMain))
+                && self
+                    .cabin_state()
+                    .map(|c| c.book_ids.iter().any(|b| b == id))
+                    .unwrap_or(false))
+    }
+
+    pub fn book_page(&self, id: &str) -> usize {
+        self.player.book_progress.get(id).copied().unwrap_or(0)
+    }
+
+    pub fn set_book_page(&mut self, id: &str, page: usize) {
+        self.player.book_progress.insert(id.to_string(), page);
+    }
+
+    pub fn on_player_pickup(&mut self, item: &Item) {
+        if matches!(item, Item::Book | Item::TutorialBook | Item::OldBook | Item::DeathNote) {
+            if let Some(book_id) = self
+                .take_cabin_book_for_item(item)
+                .or_else(|| self.book_id_for_item(item).map(|s| s.to_string()))
+            {
+                self.add_player_book(&book_id);
+            }
+        }
+    }
+
+    pub fn on_player_drop(&mut self, item: &Item) -> Option<String> {
+        if matches!(item, Item::Book | Item::TutorialBook | Item::OldBook | Item::DeathNote) {
+            // Prefer removing a matching special book id; otherwise pop any
+            if let Some(id) = self
+                .book_id_for_item(item)
+                .and_then(|id| self.remove_player_book(id).then(|| id.to_string()))
+            {
+                return Some(id);
+            }
+            if let Some(id) = self.pop_any_player_book() {
+                return Some(id);
+            }
+        }
+        None
+    }
+
     fn bootstrap_structures(&mut self) {
         let mut cabin_state = self.legacy_cabin.take().unwrap_or_else(Cabin::new);
         Self::ensure_core_cabin_items(&mut cabin_state);
@@ -232,12 +460,17 @@ impl GameState {
             wildlife: spawn_wildlife(),
             objects: ObjectRegistry::new(),
             custom_names: HashMap::new(),
+            books: GameState::default_books(),
+            next_book_id: GameState::default_next_book_id(),
             pending_messages: Vec::new(),
             legacy_cabin: None,
             legacy_wood_shed: None,
             legacy_trees: None,
         };
+        state.ensure_book_registry();
         state.bootstrap_structures();
+        state.ensure_cabin_books();
+        state.seed_bamboo_grove();
         state.seed_tree_population(map, &mut rng, 10);
         state
     }
@@ -270,8 +503,15 @@ impl GameState {
                         state.custom_names = HashMap::new();
                     }
 
+                    if state.books.is_empty() {
+                        state.books = GameState::default_books();
+                    }
+                    state.ensure_book_registry();
+
                     state.ensure_tree_objects_from_legacy();
                     state.bootstrap_structures();
+                    state.ensure_cabin_books();
+                    state.seed_bamboo_grove();
 
                     let mut rng = rand::thread_rng();
                     state.seed_tree_population(map, &mut rng, 10);
@@ -420,7 +660,16 @@ impl GameState {
         let Some(pos) = self.find_free_tree_spot(map, rng, 50) else {
             return false;
         };
-        let kind = self.random_tree_kind(rng);
+        let kind = map
+            .get_tile(pos.row as usize, pos.col as usize)
+            .map(|t| {
+                if matches!(t.biome, Biome::BambooGrove) {
+                    TreeType::Bamboo
+                } else {
+                    self.random_tree_kind(rng)
+                }
+            })
+            .unwrap_or_else(|| self.random_tree_kind(rng));
         let mut tree = Tree::with_random_fruit(pos, kind, rng);
         tree.apply_kind_defaults();
         let id = format!("tree-{}-{}-{}", pos.row, pos.col, self.objects.placed.len());
@@ -434,6 +683,29 @@ impl GameState {
             if !self.spawn_tree(map, rng) {
                 break;
             }
+        }
+    }
+
+    fn seed_bamboo_grove(&mut self) {
+        let grove_positions = [
+            Position::new(6, 2),
+            Position::new(6, 3),
+            Position::new(7, 3),
+        ];
+        for pos in grove_positions {
+            if self
+                .objects
+                .objects_at(&pos)
+                .iter()
+                .any(|p| matches!(p.object.kind, ObjectKind::Tree(_)))
+            {
+                continue;
+            }
+            let mut tree = Tree::new(pos, TreeType::Bamboo);
+            tree.apply_kind_defaults();
+            let id = format!("bamboo-{}-{}", pos.row, pos.col);
+            self.objects
+                .add(id, pos, WorldObject::new(ObjectKind::Tree(tree)));
         }
     }
 

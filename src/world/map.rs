@@ -59,6 +59,7 @@ pub enum Biome {
     Lake,        // Central lake
     MixedForest, // South and general forest
     Path,        // The path from start to cabin
+    BambooGrove, // Lakeside bamboo
 }
 
 impl Biome {
@@ -71,6 +72,7 @@ impl Biome {
             Biome::Lake => 15.0,
             Biome::MixedForest => 20.0,
             Biome::Path => 20.0,
+            Biome::BambooGrove => 22.0,
         }
     }
 
@@ -83,6 +85,7 @@ impl Biome {
             Biome::Lake => "tranquil lake",
             Biome::MixedForest => "mixed woodland",
             Biome::Path => "worn forest path",
+            Biome::BambooGrove => "bamboo grove",
         }
     }
 }
@@ -158,6 +161,7 @@ impl WorldMap {
     fn determine_biome(row: usize, col: usize) -> Biome {
         // Lake area: rows 1-5, cols 1-9
         let is_lake_area = row >= 1 && row <= 5 && col >= 1 && col <= 9;
+        let bamboo_band = row >= 6 && row <= 7 && col >= 2 && col <= 4;
 
         if is_lake_area {
             // Lake edges take on adjacent biome characteristics
@@ -167,6 +171,10 @@ impl WorldMap {
                 return Biome::Lake; // Winter side of lake
             }
             return Biome::Lake;
+        }
+
+        if bamboo_band {
+            return Biome::BambooGrove;
         }
 
         // West side - Desert
