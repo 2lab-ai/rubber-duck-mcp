@@ -11,6 +11,7 @@ A text-based healing MUD (Multi-User Dungeon) nature simulation, delivered as an
   - South: Starting area with mixed woodland
 
 - **Central Lake**: A tranquil body of water that reflects the seasons around it
+  - Craft a simple raft to push off and scout the water
 
 - **Cozy Cabin**: A refuge from the elements with:
   - Fireplace that you can light for warmth

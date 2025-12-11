@@ -255,6 +255,12 @@ impl GameState {
             fishing_done,
             "Finishing the Book of Fishing shows how to lash a simple rod.",
         );
+        add_if(
+            self,
+            Item::Raft,
+            self.player.skills.survival >= 20,
+            "Survival practice teaches how to lash a sturdy raft from logs and cordage.",
+        );
     }
 
     fn ensure_book_registry(&mut self) {
@@ -492,6 +498,7 @@ impl GameState {
             Item::Campfire => Some("Practice fire-making to level 8+ to learn this pattern."),
             Item::Cordage => Some("Tailoring 8+ reveals how to twist cordage."),
             Item::FishingRod => Some("Finish reading the Book of Fishing to unlock this."),
+            Item::Raft => Some("Grow your survival skill to 20+ to learn this build."),
             _ => None,
         }
     }
@@ -503,6 +510,7 @@ impl GameState {
             Item::Cordage,
             Item::StoneAxe,
             Item::FishingRod,
+            Item::Raft,
         ];
         let mut hints = Vec::new();
         for item in targets {

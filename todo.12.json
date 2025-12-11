@@ -15,5 +15,9 @@
   "notes": [
     "Keep it light: no mini-game, just weighted randoms with skill/gear bonuses.",
     "Reuse existing items; add new fish size items only if needed."
+  ],
+  "progress": [
+    "Implemented `fish` command with hands/rod weighting, time/weather/skill modifiers, and small/big fish/loot outcomes with XP and durability drains.",
+    "Added raft blueprint (logs/cordage) unlocking at survival 20 and a lake/oasis use action for short excursions and small findings."
   ]
 }

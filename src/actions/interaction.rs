@@ -679,6 +679,72 @@ pub fn try_use(
         }
     }
 
+    // Raft: short lake excursion for observations
+    if item == Item::Raft {
+        let pos = state.player.position;
+        let mut near_water = false;
+        'outer: for dr in -1..=1 {
+            for dc in -1..=1 {
+                let check = Position::new(pos.row + dr, pos.col + dc);
+                if let Some((r, c)) = check.as_usize() {
+                    if let Some(tile) = map.get_tile(r, c) {
+                        if matches!(tile.biome, Biome::Lake | Biome::Oasis) {
+                            near_water = true;
+                            break 'outer;
+                        }
+                    }
+                }
+            }
+        }
+        if !near_water {
+            return InteractionResult::Failure(
+                "Find a shoreline first; you need water to launch the raft.".to_string(),
+            );
+        }
+
+        let weather_here = state.weather.get_for_position(pos.row, pos.col);
+        let severe = matches!(
+            weather_here,
+            Weather::Blizzard | Weather::HeavySnow | Weather::HeavyRain | Weather::Sandstorm
+        );
+        let mut time_cost = 3;
+        let mut energy_cost = 8.0;
+        if severe {
+            time_cost += 1;
+            energy_cost += 2.0;
+        }
+
+        let mut rng = rand::thread_rng();
+        let mut findings = Vec::new();
+        if rng.gen_bool(0.5) {
+            findings.push("a glint of fish beneath the surface");
+            state.player.skills.improve("observation", 2);
+        } else {
+            state.player.skills.improve("observation", 1);
+        }
+        if rng.gen_bool(0.35) {
+            if state.player.inventory.add(Item::Driftwood, 1) {
+                findings.push("a floating piece of driftwood you haul aboard");
+            }
+        }
+
+        state.player.modify_mood(3.0);
+        let finding_text = if findings.is_empty() {
+            "You mostly drift and listen to the water slap the hull.".to_string()
+        } else {
+            findings.join("; ")
+        };
+
+        return InteractionResult::ActionSuccess {
+            message: format!(
+                "You slide the raft into the water and paddle out, letting the cabin shrink behind you. {}",
+                finding_text
+            ),
+            time_cost,
+            energy_cost,
+        };
+    }
+
     // 3b. Cooking simple foods on fire
     if matches!(
         item,

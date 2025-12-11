@@ -12,6 +12,7 @@ pub enum Item {
     SmallFish,
     BigFish,
     Fish,
+    Raft,
 
     // Resources
     Log,         // Unsplit log
@@ -68,7 +69,7 @@ pub enum Item {
     RubberDuck,
 }
 
-const ALL_ITEMS: [Item; 53] = [
+const ALL_ITEMS: [Item; 54] = [
     Item::Axe,
     Item::StoneAxe,
     Item::Knife,
@@ -78,6 +79,7 @@ const ALL_ITEMS: [Item; 53] = [
     Item::SmallFish,
     Item::BigFish,
     Item::Fish,
+    Item::Raft,
     Item::Log,
     Item::Stick,
     Item::Firewood,
@@ -136,6 +138,7 @@ impl Item {
             Item::SmallFish => "small fish",
             Item::BigFish => "big fish",
             Item::Fish => "raw fish",
+            Item::Raft => "raft",
             Item::Log => "log",
             Item::Stick => "stick",
             Item::Firewood => "firewood",
@@ -194,6 +197,7 @@ impl Item {
             Item::SmallFish => &["small fish", "tiny fish"],
             Item::BigFish => &["big fish", "large fish"],
             Item::Fish => &["fish", "raw fish"],
+            Item::Raft => &["raft", "wooden raft"],
             Item::Log => &["unsplit log", "wood"],
             Item::Stick => &["branch", "twig", "wood stick"],
             Item::Firewood => &["split firewood", "split wood"],
@@ -289,6 +293,7 @@ impl Item {
             Item::DeathNote => "A black notebook with ominous weight.",
             Item::FishingRod => "A simple wooden fishing rod with cordage for line.",
             Item::BookOfFishing => "A slim guide on casting, bait, and rod making.",
+            Item::Raft => "A lashed-together raft sturdy enough for short lake trips.",
             Item::MuddyWater => "A container of unfiltered water. Boil before drinking.",
             Item::CleanWater => "Clear, boiled water that looks safe to drink.",
             Item::CookedFish => "Tender cooked fish, still steaming gently.",
@@ -317,6 +322,7 @@ impl Item {
             Item::CookedFish => 0.4,
             Item::CookedBerries => 0.2,
             Item::FishingRod => 1.0,
+            Item::Raft => 8.0,
             _ => 0.1,
         }
     }
