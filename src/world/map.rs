@@ -91,9 +91,8 @@ impl Biome {
 pub enum TileType {
     Forest(Biome),
     Lake,
-    Cabin,
     Path,
-    WoodShed,
+    Clearing,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -203,12 +202,12 @@ impl WorldMap {
             }
         }
 
-        // Cabin at (6, 5)
-        if row == 6 && col == 5 {
-            return TileType::Cabin;
+        // Clearings for placed structures
+        if (row == 6 && col == 5) || (row == 5 && col == 4) {
+            return TileType::Clearing;
         }
 
-        // Path from start (10, 5) to cabin
+        // Path from start (10, 5) to cabin clearing
         if col == 5 && row >= 7 && row <= 10 {
             return TileType::Path;
         }

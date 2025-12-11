@@ -93,7 +93,7 @@ impl McpServer {
             },
             server_info: ServerInfo {
                 name: "rubber-duck-mcp".to_string(),
-                version: "0.1.0".to_string(),
+                version: env!("CARGO_PKG_VERSION").to_string(),
             },
         };
 
@@ -200,7 +200,7 @@ impl McpServer {
                     &self.world.state.time,
                     &self.world.state.weather,
                     &self.world.state.wildlife,
-                    &self.world.state.trees,
+                    &self.world.state.objects,
                 )
             } else {
                 format!("'{}' is not a valid direction.", dir_str)
@@ -212,9 +212,7 @@ impl McpServer {
                 &self.world.state.time,
                 &self.world.state.weather,
                 &self.world.state.wildlife,
-                &self.world.state.cabin,
-                &self.world.state.wood_shed,
-                &self.world.state.trees,
+                &self.world.state.objects,
             )
         };
 
@@ -232,11 +230,19 @@ impl McpServer {
             None => return CallToolResult::error(format!("'{}' is not a valid direction.", dir_str)),
         };
 
+        let cabin_open = self
+            .world
+            .state
+            .cabin_state()
+            .map(|c| c.door_open)
+            .unwrap_or(false);
+
         let result = try_move(
             &mut self.world.state.player,
             dir,
             &self.world.map,
-            self.world.state.cabin.door_open,
+            &self.world.state.objects,
+            cabin_open,
         );
 
         // Tick the world after movement
@@ -250,9 +256,7 @@ impl McpServer {
                     &self.world.state.time,
                     &self.world.state.weather,
                     &self.world.state.wildlife,
-                    &self.world.state.cabin,
-                    &self.world.state.wood_shed,
-                    &self.world.state.trees,
+                    &self.world.state.objects,
                 );
                 format!("{}\n\n{}", msg, location_desc)
             }
@@ -265,9 +269,7 @@ impl McpServer {
                     &self.world.state.time,
                     &self.world.state.weather,
                     &self.world.state.wildlife,
-                    &self.world.state.cabin,
-                    &self.world.state.wood_shed,
-                    &self.world.state.trees,
+                    &self.world.state.objects,
                 );
                 format!("{}\n\n{}", msg, location_desc)
             }
@@ -282,11 +284,18 @@ impl McpServer {
             None => return CallToolResult::error("Please specify a location to enter.".to_string()),
         };
 
+        let cabin_open = self
+            .world
+            .state
+            .cabin_state()
+            .map(|c| c.door_open)
+            .unwrap_or(false);
         let result = try_enter(
             &mut self.world.state.player,
             &location,
             &self.world.map,
-            self.world.state.cabin.door_open,
+            &self.world.state.objects,
+            cabin_open,
         );
 
         let text = match result {
@@ -297,9 +306,7 @@ impl McpServer {
                     &self.world.state.time,
                     &self.world.state.weather,
                     &self.world.state.wildlife,
-                    &self.world.state.cabin,
-                    &self.world.state.wood_shed,
-                    &self.world.state.trees,
+                    &self.world.state.objects,
                 );
                 format!("{}\n\n{}", msg, location_desc)
             }
@@ -320,9 +327,7 @@ impl McpServer {
                     &self.world.state.time,
                     &self.world.state.weather,
                     &self.world.state.wildlife,
-                    &self.world.state.cabin,
-                    &self.world.state.wood_shed,
-                    &self.world.state.trees,
+                    &self.world.state.objects,
                 );
                 format!("{}\n\n{}", msg, location_desc)
             }
@@ -341,9 +346,7 @@ impl McpServer {
 
         let text = examine(
             &target,
-            &self.world.state.player,
-            &self.world.state.cabin,
-            &self.world.state.wood_shed,
+            &self.world.state,
         );
 
         CallToolResult::text(text)
@@ -355,13 +358,7 @@ impl McpServer {
             None => return CallToolResult::error("Please specify an item to take.".to_string()),
         };
 
-        let result = try_take(
-            &item,
-            &mut self.world.state.player,
-            &mut self.world.state.cabin,
-            &mut self.world.state.wood_shed,
-            &mut self.world.map,
-        );
+        let result = try_take(&item, &mut self.world.state, &mut self.world.map);
 
         let text = match result {
             InteractionResult::Success(msg) => msg,
@@ -380,12 +377,7 @@ impl McpServer {
             None => return CallToolResult::error("Please specify an item to drop.".to_string()),
         };
 
-        let result = try_drop(
-            &item,
-            &mut self.world.state.player,
-            &mut self.world.state.cabin,
-            &mut self.world.state.wood_shed,
-        );
+        let result = try_drop(&item, &mut self.world.state);
 
         let text = match result {
             InteractionResult::Success(msg) => msg,
@@ -410,11 +402,8 @@ impl McpServer {
         let result = try_use(
             &item,
             target.as_deref(),
-            &mut self.world.state.player,
-            &mut self.world.state.cabin,
-            &mut self.world.state.wood_shed,
+            &mut self.world.state,
             &self.world.map,
-            &mut self.world.state.trees,
         );
 
         match result {
@@ -441,7 +430,7 @@ impl McpServer {
             None => return CallToolResult::error("Please specify an item to create.".to_string()),
         };
 
-        let result = try_create(&item, &mut self.world.state.player);
+        let result = try_create(&item, &mut self.world.state);
 
         match result {
             InteractionResult::Success(msg) => CallToolResult::text(msg),
@@ -456,11 +445,7 @@ impl McpServer {
             None => return CallToolResult::error("Please specify what to open.".to_string()),
         };
 
-        let result = try_open(
-            &target,
-            &self.world.state.player,
-            &mut self.world.state.cabin,
-        );
+        let result = try_open(&target, &mut self.world.state);
 
         let text = match result {
             InteractionResult::Success(msg) => msg,
@@ -477,11 +462,7 @@ impl McpServer {
             None => return CallToolResult::error("Please specify what to close.".to_string()),
         };
 
-        let result = try_close(
-            &target,
-            &self.world.state.player,
-            &mut self.world.state.cabin,
-        );
+        let result = try_close(&target, &mut self.world.state);
 
         let text = match result {
             InteractionResult::Success(msg) => msg,
@@ -550,7 +531,11 @@ impl McpServer {
 
         let near_water = self.is_near_water();
         let cozy_fire = matches!(room, Some(Room::CabinMain)) &&
-            !matches!(self.world.state.cabin.fireplace.state, FireState::Cold);
+            self.world
+                .state
+                .cabin_state()
+                .map(|c| !matches!(c.fireplace.state, FireState::Cold))
+                .unwrap_or(false);
 
         let (row, col) = position.as_usize().unwrap_or((5, 5));
         let biome = self.world.map.get_biome_at(row, col).unwrap_or(Biome::MixedForest);
@@ -719,9 +704,7 @@ You feel calmer and a bit more refreshed. It is now {}.",
 
     fn cmd_kick(&mut self, _args: &Option<Value>) -> CallToolResult {
         let result = kick_tree(
-            &mut self.world.state.player,
-            &mut self.world.state.cabin,
-            &mut self.world.state.trees,
+            &mut self.world.state,
         );
 
         let text = match result {
@@ -738,8 +721,7 @@ You feel calmer and a bit more refreshed. It is now {}.",
         let duck_name = self.world.state.display_name(&Item::RubberDuck);
         let result = talk_to_rubber_duck(
             message.as_deref(),
-            &self.world.state.player,
-            &self.world.state.cabin,
+            &self.world.state,
             &duck_name,
         );
 

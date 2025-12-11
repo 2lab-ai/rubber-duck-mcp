@@ -1,4 +1,4 @@
-use crate::world::{Direction, Position, WorldMap, TileType};
+use crate::world::{Direction, Position, WorldMap, TileType, ObjectRegistry, ObjectKind};
 use crate::entity::{Player, Room};
 
 pub enum MoveResult {
@@ -9,7 +9,7 @@ pub enum MoveResult {
 }
 
 /// Move the player in a direction
-pub fn try_move(player: &mut Player, dir: Direction, map: &WorldMap, cabin_open: bool) -> MoveResult {
+pub fn try_move(player: &mut Player, dir: Direction, map: &WorldMap, objects: &ObjectRegistry, cabin_open: bool) -> MoveResult {
     // If in a room, movement works differently
     if let Some(room) = &player.room {
         return handle_room_movement(player, dir, room.clone(), cabin_open);
@@ -36,14 +36,18 @@ pub fn try_move(player: &mut Player, dir: Direction, map: &WorldMap, cabin_open:
         return MoveResult::Blocked(reason.to_string());
     }
 
-    // Check cabin entrance
-    if let Some(TileType::Cabin) = map.get_tile(row, col).map(|t| &t.tile_type) {
+    // Check cabin entrance via objects
+    let target_pos = Position::new(row as i32, col as i32);
+    if objects
+        .objects_at(&target_pos)
+        .iter()
+        .any(|o| matches!(o.object.kind, ObjectKind::Cabin(_)))
+    {
         if !cabin_open {
             return MoveResult::Blocked(
                 "You stand before the cabin. The wooden door is closed. Perhaps you should try to open it.".to_string()
             );
         }
-        // Enter cabin
         player.position = new_pos;
         player.enter_room(Room::CabinMain);
         return MoveResult::RoomTransition(
@@ -59,7 +63,7 @@ pub fn try_move(player: &mut Player, dir: Direction, map: &WorldMap, cabin_open:
     MoveResult::Success(format!("You walk {}.", dir_name(dir)))
 }
 
-fn handle_room_movement(player: &mut Player, dir: Direction, current_room: Room, cabin_open: bool) -> MoveResult {
+fn handle_room_movement(player: &mut Player, dir: Direction, current_room: Room, _cabin_open: bool) -> MoveResult {
     match (&current_room, dir) {
         // From cabin main room
         (Room::CabinMain, Direction::South) => {
@@ -135,9 +139,12 @@ fn dir_name(dir: Direction) -> &'static str {
 }
 
 /// Enter a location at current position
-pub fn try_enter(player: &mut Player, target: &str, map: &WorldMap, cabin_open: bool) -> MoveResult {
+pub fn try_enter(player: &mut Player, target: &str, _map: &WorldMap, objects: &ObjectRegistry, cabin_open: bool) -> MoveResult {
     let normalized = target.to_lowercase();
-    let cabin_pos = Position::new(6, 5);
+    let cabin_pos = objects
+        .find("cabin")
+        .map(|p| p.position)
+        .unwrap_or_else(|| Position::new(6, 5));
 
     // Check if trying to enter cabin (either on cabin tile or adjacent to it)
     if normalized.contains("cabin") || normalized.contains("door") || normalized.contains("house") {
@@ -165,8 +172,8 @@ pub fn try_enter(player: &mut Player, target: &str, map: &WorldMap, cabin_open: 
 
     // Check for entering wood shed from outside
     if player.room.is_none() {
-        if player.position.distance_to(&cabin_pos) < 2.0 {
-            if normalized.contains("shed") || normalized.contains("wood") {
+        if let Some(shed_pos) = objects.find("wood_shed").map(|p| p.position) {
+            if player.position.distance_to(&shed_pos) < 2.0 && (normalized.contains("shed") || normalized.contains("wood")) {
                 player.enter_room(Room::WoodShed);
                 return MoveResult::RoomTransition(
                     "You enter the small wood shed.".to_string()

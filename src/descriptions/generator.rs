@@ -115,13 +115,18 @@ impl DescriptionGenerator {
         time: &WorldTime,
         weather: &RegionalWeather,
         wildlife: &[Wildlife],
-        cabin: &Cabin,
-        wood_shed: &WoodShed,
-        trees: &[Tree],
+        objects: &ObjectRegistry,
     ) -> String {
+        let cabin_ref = objects
+            .find("cabin")
+            .and_then(|p| p.object.as_cabin());
+        let wood_shed_ref = objects
+            .find("wood_shed")
+            .and_then(|p| p.object.as_wood_shed());
+
         // If in a room, describe that instead
         if let Some(room) = &player.room {
-            return Self::describe_room(room, cabin, wood_shed, time, weather);
+            return Self::describe_room(room, cabin_ref, wood_shed_ref, time, weather, objects);
         }
 
         let (row, col) = match player.position.as_usize() {
@@ -143,10 +148,38 @@ impl DescriptionGenerator {
         description.push_str("\n\n");
         description.push_str(&Self::tile_description(tile, row, col, player.facing, map));
 
-        // Trees nearby
-        if let Some(tree) = trees.iter().find(|t| !t.felled && t.position == player.position) {
+        // Trees or objects on this tile
+        if let Some(tree) = objects.find_tree_at(&player.position) {
+            if !tree.felled {
+                description.push_str("\n\n");
+                description.push_str(tree.description());
+            }
+        }
+
+        let objects_here = objects.objects_at(&player.position);
+        if !objects_here.is_empty() {
+            let names: Vec<_> = objects_here
+                .iter()
+                .map(|o| o.object.display_name())
+                .collect();
             description.push_str("\n\n");
-            description.push_str(tree.description());
+            description.push_str(&format!("Here you notice: {}.", names.join(", ")));
+        }
+
+        let mut visible_objects = Vec::new();
+        for po in objects.visible_from(&player.position) {
+            if po.position == player.position {
+                continue;
+            }
+            let dir = direction_to(&player.position, &po.position);
+            visible_objects.push(format!("{} ({})", po.object.display_name(), dir));
+            if visible_objects.len() >= 4 {
+                break;
+            }
+        }
+        if !visible_objects.is_empty() {
+            description.push_str("\n\n");
+            description.push_str(&format!("In view: {}.", visible_objects.join(", ")));
         }
 
         // Sky description
@@ -178,7 +211,8 @@ impl DescriptionGenerator {
 
         // Exits
         description.push_str("\n\n");
-        description.push_str(&Self::describe_exits(row, col, map, cabin.door_open));
+        let cabin_open = cabin_ref.map(|c| c.door_open).unwrap_or(false);
+        description.push_str(&Self::describe_exits(row, col, map, objects, cabin_open));
 
         description
     }
@@ -217,13 +251,8 @@ impl DescriptionGenerator {
             time_phrase, weather_phrase, biome.name())
     }
 
-    fn tile_description(tile: &Tile, row: usize, col: usize, facing: Direction, map: &WorldMap) -> String {
+    fn tile_description(tile: &Tile, row: usize, _col: usize, facing: Direction, _map: &WorldMap) -> String {
         match &tile.tile_type {
-            TileType::Cabin => {
-                "Before you stands a cozy wooden cabin. Its weathered planks speak of many seasons, \
-                and a stone chimney rises from the shingled roof. A worn path leads to its wooden door."
-                    .to_string()
-            }
             TileType::Path => {
                 let ahead = match facing {
                     Direction::North if row > 6 => "The path continues north toward a cabin.",
@@ -234,14 +263,15 @@ impl DescriptionGenerator {
                 };
                 format!("You stand on a well-trodden dirt path through the forest. {}", ahead)
             }
+            TileType::Clearing => {
+                "A small clearing opens here, the ground packed from footsteps and use. It's a natural spot for structures or camp setups."
+                    .to_string()
+            }
             TileType::Forest(biome) => Self::forest_description(*biome),
             TileType::Lake => {
                 "Crystal-clear water stretches before you, its surface like a mirror reflecting the sky. \
                 Gentle ripples spread from somewhere near the center."
                     .to_string()
-            }
-            TileType::WoodShed => {
-                "A small wooden shed stands here, its door slightly ajar.".to_string()
             }
         }
     }
@@ -284,7 +314,7 @@ impl DescriptionGenerator {
         }
     }
 
-    fn describe_exits(row: usize, col: usize, map: &WorldMap, cabin_open: bool) -> String {
+    fn describe_exits(row: usize, col: usize, map: &WorldMap, objects: &ObjectRegistry, cabin_open: bool) -> String {
         let mut exits = Vec::new();
 
         // Check each direction
@@ -301,19 +331,25 @@ impl DescriptionGenerator {
 
             if new_row >= 0 && new_col >= 0 {
                 if let Some(tile) = map.get_tile(new_row as usize, new_col as usize) {
-                    let exit_desc = match &tile.tile_type {
+                    let pos = Position::new(new_row, new_col);
+                    let objects_here = objects.objects_at(&pos);
+                    let mut exit_desc = match &tile.tile_type {
                         TileType::Lake => format!("{}: the lake waters", dir_str(dir)),
-                        TileType::Cabin => {
-                            if cabin_open {
-                                format!("{}: the cabin (door open)", dir_str(dir))
-                            } else {
-                                format!("{}: the cabin (door closed)", dir_str(dir))
-                            }
-                        }
                         TileType::Path => format!("{}: the forest path", dir_str(dir)),
+                        TileType::Clearing => format!("{}: a small clearing", dir_str(dir)),
                         TileType::Forest(biome) => format!("{}: {}", dir_str(dir), biome.name()),
-                        TileType::WoodShed => format!("{}: wood shed", dir_str(dir)),
                     };
+
+                    if objects_here.iter().any(|o| matches!(o.object.kind, ObjectKind::Cabin(_))) {
+                        exit_desc = if cabin_open {
+                            format!("{}: the cabin (door open)", dir_str(dir))
+                        } else {
+                            format!("{}: the cabin (door closed)", dir_str(dir))
+                        };
+                    } else if objects_here.iter().any(|o| matches!(o.object.kind, ObjectKind::WoodShed(_))) {
+                        exit_desc = format!("{}: wood shed", dir_str(dir));
+                    }
+
                     exits.push(exit_desc);
                 }
             }
@@ -326,15 +362,18 @@ impl DescriptionGenerator {
         }
     }
 
-    fn describe_room(room: &Room, cabin: &Cabin, wood_shed: &WoodShed, time: &WorldTime, weather: &RegionalWeather) -> String {
+    fn describe_room(room: &Room, cabin: Option<&Cabin>, wood_shed: Option<&WoodShed>, time: &WorldTime, weather: &RegionalWeather, objects: &ObjectRegistry) -> String {
         match room {
-            Room::CabinMain => Self::describe_cabin_main(cabin, time),
+            Room::CabinMain => Self::describe_cabin_main(cabin, objects, time),
             Room::CabinTerrace => Self::describe_cabin_terrace(time, weather),
             Room::WoodShed => Self::describe_wood_shed(wood_shed),
         }
     }
 
-    fn describe_cabin_main(cabin: &Cabin, time: &WorldTime) -> String {
+    fn describe_cabin_main(cabin: Option<&Cabin>, objects: &ObjectRegistry, time: &WorldTime) -> String {
+        let Some(cabin) = cabin else {
+            return "You are in a sparse wooden room, though something feels missing here.".to_string();
+        };
         let tod = time.time_of_day();
 
         let light = match (tod, &cabin.fireplace.state) {
@@ -373,7 +412,11 @@ impl DescriptionGenerator {
             format!("\n\nScattered about you notice: {}.", items_on_ground.join(", "))
         };
 
-        let table_items = cabin.table_item_names();
+        let table_items = objects
+            .find("cabin_table")
+            .and_then(|p| p.object.surface.as_ref())
+            .map(|s| s.items.iter().map(|i| i.name().to_string()).collect::<Vec<_>>())
+            .unwrap_or_else(|| cabin.table_item_names());
         let table_desc = if table_items.is_empty() {
             "A sturdy wooden table sits at the center, its surface worn smooth by time.".to_string()
         } else {
@@ -442,7 +485,11 @@ impl DescriptionGenerator {
         description
     }
 
-    fn describe_wood_shed(wood_shed: &WoodShed) -> String {
+    fn describe_wood_shed(wood_shed: Option<&WoodShed>) -> String {
+        let Some(wood_shed) = wood_shed else {
+            return "An empty shed stands here, but its contents are unclear.".to_string();
+        };
+
         let axe_desc = if wood_shed.axe_on_floor {
             "A well-used axe lies on the earthen floor."
         } else {
@@ -484,7 +531,7 @@ impl DescriptionGenerator {
         time: &WorldTime,
         weather: &RegionalWeather,
         wildlife: &[Wildlife],
-        trees: &[Tree],
+        objects: &ObjectRegistry,
     ) -> String {
         // If in terrace, special viewing
         if matches!(player.room, Some(Room::CabinTerrace)) {
@@ -511,28 +558,60 @@ impl DescriptionGenerator {
         }
 
         let tile = map.get_tile(look_row as usize, look_col as usize).unwrap();
+        let look_pos = Position::new(look_row, look_col);
+        let objects_here: Vec<_> = objects
+            .objects_at(&look_pos)
+            .into_iter()
+            .filter(|p| {
+                let distance = player.position.distance_to(&p.position);
+                distance <= p.object.visibility_range() as f32 + 0.01
+            })
+            .collect();
 
         let mut desc = format!("Looking {}: ", dir_str(dir));
 
         desc.push_str(&match &tile.tile_type {
             TileType::Lake => "The lake's surface glitters, stretching into the distance.".to_string(),
-            TileType::Cabin => "The cabin stands waiting, its chimney silhouetted against the sky.".to_string(),
             TileType::Path => "A well-worn path winds through the trees.".to_string(),
-            TileType::Forest(biome) => {
-                let mut base = Self::distant_biome_description(*biome);
-                if let Some(tree) = trees.iter().find(|t| !t.felled && t.position.row == look_row && t.position.col == look_col) {
-                    base.push_str(" You spot a ");
-                    base.push_str(match tree.kind {
+            TileType::Clearing => "A worn clearing breaks the line of trees.".to_string(),
+            TileType::Forest(biome) => Self::distant_biome_description(*biome),
+        });
+
+        if let Some(tree_obj) = objects_here
+            .iter()
+            .find(|o| matches!(o.object.kind, ObjectKind::Tree(_)))
+        {
+            if let ObjectKind::Tree(tree) = &tree_obj.object.kind {
+                if !tree.felled {
+                    desc.push(' ');
+                    desc.push_str("You spot a ");
+                    desc.push_str(match tree.kind {
                         TreeType::Pine => "tall pine",
                         TreeType::Birch => "slender birch",
                         TreeType::Apple => "sturdy apple tree",
                     });
-                    base.push('.');
+                    desc.push('.');
                 }
-                base
             }
-            TileType::WoodShed => "The small wood shed is visible.".to_string(),
-        });
+        }
+
+        for obj in objects_here {
+            match obj.object.kind {
+                ObjectKind::Cabin(_) => {
+                    desc.push(' ');
+                    desc.push_str("The cabin sits there, solid and welcoming.");
+                }
+                ObjectKind::WoodShed(_) => {
+                    desc.push(' ');
+                    desc.push_str("A small wood shed rests here.");
+                }
+                ObjectKind::Table | ObjectKind::Wall | ObjectKind::Boulder | ObjectKind::GenericStructure(_) => {
+                    desc.push(' ');
+                    desc.push_str(&format!("You notice a {}.", obj.object.display_name()));
+                }
+                _ => {}
+            }
+        }
 
         // Check for wildlife in that direction
         let wildlife_there: Vec<_> = wildlife.iter()
@@ -632,5 +711,21 @@ fn dir_str(dir: Direction) -> &'static str {
         Direction::West => "West",
         Direction::Up => "Up",
         Direction::Down => "Down",
+    }
+}
+
+fn direction_to(from: &Position, to: &Position) -> &'static str {
+    let dr = to.row - from.row;
+    let dc = to.col - from.col;
+    match (dr.signum(), dc.signum()) {
+        (-1, 0) => "N",
+        (1, 0) => "S",
+        (0, 1) => "E",
+        (0, -1) => "W",
+        (-1, 1) => "NE",
+        (-1, -1) => "NW",
+        (1, 1) => "SE",
+        (1, -1) => "SW",
+        _ => "nearby",
     }
 }

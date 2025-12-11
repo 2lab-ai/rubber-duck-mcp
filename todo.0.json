@@ -1,0 +1,19 @@
+{
+  "task_id": 0,
+  "scope": "System Core: Tile & Object",
+  "goal": "Represent tiles with placed objects (cabin, wood shed, trees, furniture) plus visibility rules.",
+  "decisions": [
+    "Introduce a tile object model (kind, size, supports surface/attachments) and keep terrain as separate ground data.",
+    "Place cabin/wood shed/trees as objects on tiles rather than special tile types; persist objects with their state.",
+    "Define size-based visibility: default near (1 tile), large objects (2), trees (3), cabin-scale (5)."
+  ],
+  "plan": [
+    "Add world object definitions and a per-tile/position object registry that can serialize with game state.",
+    "Update world generation/state init to spawn objects (cabin, wood shed, tree placeholders, basic surfaces) on tiles.",
+    "Refactor movement/look/examine/description to consume the object registry and apply new visibility ranges."
+  ],
+  "notes": [
+    "Surfaces (e.g., table/wall) are objects that can hold items or attachments.",
+    "Legacy item interactions (inventory, fireplace) stay but are reached via their object instances."
+  ]
+}

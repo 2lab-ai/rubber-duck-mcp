@@ -1,6 +1,7 @@
 use rand::Rng;
-use crate::entity::{Player, Room, Item, Cabin, WoodShed, Tree, TreeType, FireState, Blueprint};
-use crate::world::{WorldMap, TileType};
+use crate::entity::{Room, Item, Blueprint};
+use crate::world::WorldMap;
+use crate::persistence::GameState;
 
 pub enum InteractionResult {
     Success(String),
@@ -131,14 +132,24 @@ fn random_duck_phrase(rng: &mut impl rand::Rng) -> String {
 // ... Open/Close/Take/Drop handlers (omitted here to save space if unchanged, but will include needed ones) ...
 // Actually, I need to include them to overwrite the file properly.
 
-pub fn try_open(target: &str, player: &Player, cabin: &mut Cabin) -> InteractionResult {
+pub fn try_open(target: &str, state: &mut GameState) -> InteractionResult {
     let normalized = target.to_lowercase();
+    let cabin_pos = match state.objects.find("cabin") {
+        Some(obj) => obj.position,
+        None => return InteractionResult::Failure("You don't see a cabin to open.".to_string()),
+    };
     if normalized.contains("door") || normalized.contains("cabin") {
+        let near_cabin = {
+            let room = state.player.room.clone();
+            state.player.position.distance_to(&cabin_pos) <= 1.5
+                || matches!(room, Some(Room::CabinMain))
+        };
+        let Some(cabin) = state.cabin_state_mut() else {
+            return InteractionResult::Failure("The cabin seems missing its details.".to_string());
+        };
         if cabin.door_open {
             return InteractionResult::Failure("The door is already open.".to_string());
         }
-        let cabin_pos = crate::world::Position::new(6, 5);
-        let near_cabin = player.position.distance_to(&cabin_pos) <= 1.5 || matches!(player.room, Some(Room::CabinMain));
         if !near_cabin {
             return InteractionResult::Failure("You're too far from the cabin door.".to_string());
         }
@@ -149,14 +160,24 @@ pub fn try_open(target: &str, player: &Player, cabin: &mut Cabin) -> Interaction
     }
 }
 
-pub fn try_close(target: &str, player: &Player, cabin: &mut Cabin) -> InteractionResult {
+pub fn try_close(target: &str, state: &mut GameState) -> InteractionResult {
     let normalized = target.to_lowercase();
+    let cabin_pos = match state.objects.find("cabin") {
+        Some(obj) => obj.position,
+        None => return InteractionResult::Failure("You don't see a cabin to close.".to_string()),
+    };
     if normalized.contains("door") || normalized.contains("cabin") {
+        let near_cabin = {
+            let room = state.player.room.clone();
+            state.player.position.distance_to(&cabin_pos) <= 1.5
+                || matches!(room, Some(Room::CabinMain))
+        };
+        let Some(cabin) = state.cabin_state_mut() else {
+            return InteractionResult::Failure("The cabin seems missing its details.".to_string());
+        };
         if !cabin.door_open {
             return InteractionResult::Failure("The door is already closed.".to_string());
         }
-        let cabin_pos = crate::world::Position::new(6, 5);
-        let near_cabin = player.position.distance_to(&cabin_pos) <= 1.5 || matches!(player.room, Some(Room::CabinMain));
         if !near_cabin {
             return InteractionResult::Failure("You're too far from the cabin door.".to_string());
         }
@@ -167,65 +188,135 @@ pub fn try_close(target: &str, player: &Player, cabin: &mut Cabin) -> Interactio
     }
 }
 
-pub fn try_take(item_name: &str, player: &mut Player, cabin: &mut Cabin, wood_shed: &mut WoodShed, map: &mut WorldMap) -> InteractionResult {
+pub fn try_take(item_name: &str, state: &mut GameState, map: &mut WorldMap) -> InteractionResult {
     let item = match Item::from_str(item_name) {
         Some(i) => i,
         None => return InteractionResult::Failure(format!("You don't know what '{}' is.", item_name)),
     };
 
-    match &player.room {
+    let player_room = state.player.room.clone();
+
+    match player_room {
         Some(Room::CabinMain) => {
-            if cabin.take_item(&item) {
-                if player.inventory.add(item.clone(), 1) {
+            let mut from_cabin_floor = false;
+            {
+                if let Some(cabin) = state.cabin_state_mut() {
+                    from_cabin_floor = cabin.take_item(&item);
+                }
+            }
+            if from_cabin_floor {
+                if state.player.inventory.add(item.clone(), 1) {
                     return InteractionResult::ItemObtained(item.clone(), format!("You pick up the {}.", item.name()));
                 } else {
-                    cabin.add_item(item.clone());
+                    if let Some(cabin) = state.cabin_state_mut() {
+                        cabin.add_item(item.clone());
+                    }
                     return InteractionResult::Failure("Your inventory is too heavy.".to_string());
                 }
             }
-            if cabin.take_table_item(&item) {
-                if player.inventory.add(item.clone(), 1) {
+
+            if state.take_table_item(&item) {
+                if state.player.inventory.add(item.clone(), 1) {
                     return InteractionResult::ItemObtained(item.clone(), format!("You lift the {} from the table.", item.name()));
                 } else {
-                    cabin.add_table_item(item.clone());
+                    state.add_table_item(item.clone());
                     return InteractionResult::Failure("Too heavy.".to_string());
                 }
             }
-            if item == Item::Matchbox && cabin.has_item(&Item::Matchbox) {
-                if cabin.take_item(&Item::Matchbox) && player.inventory.add(Item::Matchbox, 1) {
+
+            if item == Item::Matchbox {
+                let mut took = false;
+                {
+                    if let Some(cabin) = state.cabin_state_mut() {
+                        if cabin.has_item(&Item::Matchbox) {
+                            took = cabin.take_item(&Item::Matchbox);
+                        }
+                    }
+                }
+                if took && state.player.inventory.add(Item::Matchbox, 1) {
                     return InteractionResult::ItemObtained(Item::Matchbox, "You take the matchbox from the mantelpiece.".to_string());
+                } else if took {
+                    if let Some(cabin) = state.cabin_state_mut() {
+                        cabin.add_item(Item::Matchbox);
+                    }
+                    return InteractionResult::Failure("Your inventory is too heavy.".to_string());
                 }
             }
         }
         Some(Room::WoodShed) => {
-            if item == Item::Axe && wood_shed.axe_on_floor {
-                wood_shed.axe_on_floor = false;
-                if player.inventory.add(Item::Axe, 1) {
-                    return InteractionResult::ItemObtained(Item::Axe, "You pick up the heavy axe.".to_string());
-                } else {
-                    wood_shed.axe_on_floor = true;
-                    return InteractionResult::Failure("Too heavy.".to_string());
+            if item == Item::Axe {
+                let mut picked_up = false;
+                {
+                    if let Some(wood_shed) = state.wood_shed_state_mut() {
+                        if wood_shed.axe_on_floor {
+                            wood_shed.axe_on_floor = false;
+                            picked_up = true;
+                        }
+                    }
+                }
+                if picked_up {
+                    if state.player.inventory.add(Item::Axe, 1) {
+                        return InteractionResult::ItemObtained(Item::Axe, "You pick up the heavy axe.".to_string());
+                    } else {
+                        if let Some(wood_shed) = state.wood_shed_state_mut() {
+                            wood_shed.axe_on_floor = true;
+                        }
+                        return InteractionResult::Failure("Too heavy.".to_string());
+                    }
                 }
             }
-            if item == Item::Log && wood_shed.logs > 0 {
-                if player.inventory.add(Item::Log, 1) {
-                    wood_shed.logs -= 1;
-                    return InteractionResult::ItemObtained(Item::Log, format!("You heft a heavy log. {} remain.", wood_shed.logs));
-                } else { return InteractionResult::Failure("Carrying too much.".to_string()); }
+
+            if item == Item::Log {
+                let mut took_log = false;
+                {
+                    if let Some(wood_shed) = state.wood_shed_state_mut() {
+                        if wood_shed.logs > 0 {
+                            wood_shed.logs -= 1;
+                            took_log = true;
+                        }
+                    }
+                }
+                if took_log {
+                    if state.player.inventory.add(Item::Log, 1) {
+                        let remaining = state.wood_shed_state().map(|w| w.logs).unwrap_or(0);
+                        return InteractionResult::ItemObtained(Item::Log, format!("You heft a heavy log. {} remain.", remaining));
+                    } else {
+                        if let Some(wood_shed) = state.wood_shed_state_mut() {
+                            wood_shed.logs += 1;
+                        }
+                        return InteractionResult::Failure("Carrying too much.".to_string());
+                    }
+                }
             }
-            if item == Item::Firewood && wood_shed.firewood > 0 {
-                if player.inventory.add(Item::Firewood, 1) {
-                    wood_shed.firewood -= 1;
-                    return InteractionResult::ItemObtained(Item::Firewood, "You gather a piece of split firewood.".to_string());
+
+            if item == Item::Firewood {
+                let mut took_firewood = false;
+                {
+                    if let Some(wood_shed) = state.wood_shed_state_mut() {
+                        if wood_shed.firewood > 0 {
+                            wood_shed.firewood -= 1;
+                            took_firewood = true;
+                        }
+                    }
+                }
+                if took_firewood {
+                    if state.player.inventory.add(Item::Firewood, 1) {
+                        return InteractionResult::ItemObtained(Item::Firewood, "You gather a piece of split firewood.".to_string());
+                    } else {
+                        if let Some(wood_shed) = state.wood_shed_state_mut() {
+                            wood_shed.firewood += 1;
+                        }
+                        return InteractionResult::Failure("Carrying too much.".to_string());
+                    }
                 }
             }
         }
         None => {
             // Outdoors - check tile items
-            if let Some((r, c)) = player.position.as_usize() {
+            if let Some((r, c)) = state.player.position.as_usize() {
                 if let Some(tile) = map.get_tile_mut(r, c) {
                     if tile.items.take(&item) {
-                        if player.inventory.add(item.clone(), 1) {
+                        if state.player.inventory.add(item.clone(), 1) {
                             return InteractionResult::ItemObtained(item.clone(), format!("You pick up the {}.", item.name()));
                         } else {
                             tile.items.add(item.clone(), 1); // Put it back
@@ -240,23 +331,29 @@ pub fn try_take(item_name: &str, player: &mut Player, cabin: &mut Cabin, wood_sh
     InteractionResult::Failure(format!("You don't see any {} here that you can take.", item_name))
 }
 
-pub fn try_drop(item_name: &str, player: &mut Player, cabin: &mut Cabin, wood_shed: &mut WoodShed) -> InteractionResult {
+pub fn try_drop(item_name: &str, state: &mut GameState) -> InteractionResult {
     let item = match Item::from_str(item_name) {
         Some(i) => i,
         None => return InteractionResult::Failure(format!("You don't know what '{}' is.", item_name)),
     };
-    if !player.inventory.has(&item, 1) {
+    if !state.player.inventory.has(&item, 1) {
         return InteractionResult::Failure(format!("You don't have any {}.", item.name()));
     }
-    player.inventory.remove(&item, 1);
-    match &player.room {
-        Some(Room::CabinMain) => { cabin.add_item(item.clone()); }
+    state.player.inventory.remove(&item, 1);
+    match &state.player.room {
+        Some(Room::CabinMain) => {
+            if let Some(cabin) = state.cabin_state_mut() {
+                cabin.add_item(item.clone());
+            }
+        }
         Some(Room::WoodShed) => {
-            match &item {
-                Item::Axe => wood_shed.axe_on_floor = true,
-                Item::Log => wood_shed.logs += 1,
-                Item::Firewood => wood_shed.firewood += 1,
-                _ => {}
+            if let Some(wood_shed) = state.wood_shed_state_mut() {
+                match &item {
+                    Item::Axe => wood_shed.axe_on_floor = true,
+                    Item::Log => wood_shed.logs += 1,
+                    Item::Firewood => wood_shed.firewood += 1,
+                    _ => {}
+                }
             }
         }
         _ => {} // Outside, items just... go away for now
@@ -264,8 +361,9 @@ pub fn try_drop(item_name: &str, player: &mut Player, cabin: &mut Cabin, wood_sh
     InteractionResult::ItemLost(item.clone(), format!("You set down the {}.", item.name()))
 }
 
-pub fn examine(target: &str, player: &Player, cabin: &Cabin, wood_shed: &WoodShed) -> String {
+pub fn examine(target: &str, state: &GameState) -> String {
     let normalized = target.to_lowercase();
+    let player = &state.player;
     
     // Check for active project
     if normalized.contains("blueprint") || normalized.contains("project") {
@@ -276,16 +374,20 @@ pub fn examine(target: &str, player: &Player, cabin: &Cabin, wood_shed: &WoodShe
         }
     }
 
-    for (item, _) in player.inventory.list() {
+    for (item, _) in state.player.inventory.list() {
         if item.name().to_lowercase().contains(&normalized) {
             return item.description().to_string();
         }
     }
-    match &player.room {
+    match &state.player.room {
         Some(Room::CabinMain) => {
-            if normalized.contains("fire") || normalized.contains("hearth") { return cabin.fireplace.state.description().to_string(); }
+            if normalized.contains("fire") || normalized.contains("hearth") {
+                if let Some(cabin) = state.cabin_state() {
+                    return cabin.fireplace.state.description().to_string();
+                }
+            }
             if normalized.contains("table") {
-                let items = cabin.table_item_names();
+                let items = state.table_item_names();
                 return if items.is_empty() { "A sturdy wooden table, surface clear.".to_string() } else { format!("A sturdy wooden table, holding: {}.", items.join(", ")) };
             }
             // ... (other examine logic)
@@ -293,16 +395,23 @@ pub fn examine(target: &str, player: &Player, cabin: &Cabin, wood_shed: &WoodShe
         _ => {}
     }
     // ... (self examine)
-    if normalized.contains("self") || normalized == "me" { return player.status_summary(); }
+    if normalized.contains("self") || normalized == "me" { return state.player.status_summary(); }
     format!("You don't see anything special about '{}'.", target)
 }
 
-pub fn talk_to_rubber_duck(message: Option<&str>, player: &Player, cabin: &Cabin, duck_name: &str) -> InteractionResult {
-    let holding_duck = player.inventory.has(&Item::RubberDuck, 1);
-    let duck_in_cabin = cabin.items.contains(&Item::RubberDuck) || cabin.table_items.contains(&Item::RubberDuck);
-    let in_cabin = matches!(player.room, Some(Room::CabinMain));
+pub fn talk_to_rubber_duck(message: Option<&str>, state: &GameState, duck_name: &str) -> InteractionResult {
+    let holding_duck = state.player.inventory.has(&Item::RubberDuck, 1);
+    let duck_on_table = state
+        .table_surface()
+        .map(|s| s.items.contains(&Item::RubberDuck))
+        .unwrap_or(false);
+    let duck_in_cabin = state
+        .cabin_state()
+        .map(|c| c.items.contains(&Item::RubberDuck) || c.table_items.contains(&Item::RubberDuck))
+        .unwrap_or(false);
+    let in_cabin = matches!(state.player.room, Some(Room::CabinMain));
 
-    if !(holding_duck || (in_cabin && duck_in_cabin)) {
+    if !(holding_duck || (in_cabin && (duck_in_cabin || duck_on_table))) {
         return InteractionResult::Failure("You need to be near the rubber duck.".to_string());
     }
     let mut rng = rand::thread_rng();
@@ -321,18 +430,15 @@ pub fn talk_to_rubber_duck(message: Option<&str>, player: &Player, cabin: &Cabin
 pub fn try_use(
     item_name: &str,
     target_name: Option<&str>,
-    player: &mut Player,
-    cabin: &mut Cabin,
-    wood_shed: &mut WoodShed,
-    map: &WorldMap,
-    trees: &mut Vec<Tree>,
+    state: &mut GameState,
+    _map: &WorldMap,
 ) -> InteractionResult {
     let item = match Item::from_str(item_name) {
         Some(i) => i,
         None => return InteractionResult::Failure(format!("You don't know what '{}' is.", item_name)),
     };
 
-    if !player.inventory.has(&item, 1) {
+    if !state.player.inventory.has(&item, 1) {
         return InteractionResult::Failure(format!("You don't have a {}.", item.name()));
     }
 
@@ -342,14 +448,14 @@ pub fn try_use(
     // 1. Blueprint Interaction (Building)
     if let Some(target) = target_str {
         if target.contains("blueprint") || target.contains("project") {
-            return handle_blueprint_interaction(player, &item);
+            return handle_blueprint_interaction(state, &item);
         }
     }
     // Also check if target is the name of the blueprint item
-    if let Some(bp) = &player.active_project {
+    if let Some(bp) = &state.player.active_project {
         if let Some(target) = target_str {
             if bp.target_item.name().to_lowercase().contains(target) {
-                return handle_blueprint_interaction(player, &item);
+                return handle_blueprint_interaction(state, &item);
             }
         }
     }
@@ -360,27 +466,24 @@ pub fn try_use(
              if item == Item::Axe || item == Item::StoneAxe {
                  // Check if it's chopping block or standing tree
                  if target.contains("block") || target.contains("chop") {
-                     return try_chop_firewood(player, wood_shed);
+                     return try_chop_firewood(state);
                  } else {
-                     return try_chop_tree(player, trees, map, wood_shed, cabin);
+                     return try_chop_tree(state, _map);
                  }
              }
         }
         if target.contains("bush") || target.contains("shrub") || target.contains("ground") {
-             return handle_foraging(player, &item);
+             return handle_foraging(state, &item);
         }
     }
 
     // 3. Processing (Crafting Materials)
-    // Knife on Wood -> Kindling/Sticks
-    if (item == Item::Knife || item == Item::StoneKnife) {
+    if item == Item::Knife || item == Item::StoneKnife {
         if let Some(target) = target_str {
             if target.contains("log") {
-                // Knife on Log -> Kindling (Heavy work)
-                // Logic: Need log in inventory
-                if player.inventory.has(&Item::Log, 1) {
-                    player.inventory.remove(&Item::Log, 1);
-                    player.inventory.add(Item::Kindling, 4);
+                if state.player.inventory.has(&Item::Log, 1) {
+                    state.player.inventory.remove(&Item::Log, 1);
+                    state.player.inventory.add(Item::Kindling, 4);
                     return InteractionResult::ActionSuccess {
                         message: "You whittle the log down into a pile of fine kindling.".to_string(),
                         time_cost: 2, // 20 mins
@@ -389,10 +492,9 @@ pub fn try_use(
                 }
             }
             if target.contains("branch") || target.contains("stick") {
-                // Knife on Stick -> Sharp Stick (Spear?) or Tinder
-                if player.inventory.has(&Item::Stick, 1) {
-                    player.inventory.remove(&Item::Stick, 1);
-                    player.inventory.add(Item::Kindling, 1);
+                if state.player.inventory.has(&Item::Stick, 1) {
+                    state.player.inventory.remove(&Item::Stick, 1);
+                    state.player.inventory.add(Item::Kindling, 1);
                     return InteractionResult::ActionSuccess {
                         message: "You shave the stick into tinder.".to_string(),
                         time_cost: 1,
@@ -407,11 +509,10 @@ pub fn try_use(
     if item == Item::Stone {
         if let Some(target) = target_str {
             if target.contains("stone") || target.contains("rock") {
-                if player.inventory.count(&Item::Stone) >= 2 {
-                    player.inventory.remove(&Item::Stone, 1); // Consume one stone? Or just risk breaking?
-                    // Let's say 1 stone is consumed to make a sharp one
-                    player.inventory.add(Item::SharpStone, 1);
-                    player.skills.improve("stonemasonry", 5);
+                if state.player.inventory.count(&Item::Stone) >= 2 {
+                    state.player.inventory.remove(&Item::Stone, 1);
+                    state.player.inventory.add(Item::SharpStone, 1);
+                    state.player.skills.improve("stonemasonry", 5);
                     return InteractionResult::ActionSuccess {
                         message: "You smash the stones together, flaking off a razor-sharp edge.".to_string(),
                         time_cost: 1,
@@ -426,38 +527,30 @@ pub fn try_use(
 
     // 4. Fire Interaction
     let is_fire_target = target_str.map(|t| t.contains("fire") || t.contains("hearth")).unwrap_or(false);
-    let in_cabin = matches!(player.room, Some(Room::CabinMain));
+    let in_cabin = matches!(state.player.room, Some(Room::CabinMain));
     
     if is_fire_target || (in_cabin && target_str.is_none()) {
-        // Adding fuel
         if item.is_flammable() {
-            return handle_add_fuel(player, cabin, item);
+            return handle_add_fuel(state, item);
         }
-        // Lighting fire
         if item == Item::Matchbox {
-            return handle_light_fire(player, cabin);
+            return handle_light_fire(state);
         }
     }
 
     // 5. Consumption (Food/Drink)
     if matches!(item, Item::Apple | Item::WildBerry | Item::HerbalTea | Item::Date) {
-        return handle_consumption(player, item);
+        return handle_consumption(state, item);
     }
 
     InteractionResult::Failure(format!("You can't use the {} that way.", item.name()))
 }
 
-fn handle_blueprint_interaction(player: &mut Player, item: &Item) -> InteractionResult {
-    let mut completed = false;
-    let mut blueprint_name = String::new();
-    
-    if let Some(bp) = &mut player.active_project {
-        blueprint_name = bp.target_item.name().to_string();
+fn handle_blueprint_interaction(state: &mut GameState, item: &Item) -> InteractionResult {
+    if let Some(bp) = &mut state.player.active_project {
         if bp.add_material(item.clone()) {
-            player.inventory.remove(item, 1);
-            if bp.is_complete() {
-                completed = true;
-            } else {
+            state.player.inventory.remove(item, 1);
+            if !bp.is_complete() {
                 return InteractionResult::ActionSuccess {
                     message: format!("You add the {} to the {}. Progress: {}", item.name(), bp.target_item.name(), bp.status_description()),
                     time_cost: 1, // 10 mins per action
@@ -471,49 +564,46 @@ fn handle_blueprint_interaction(player: &mut Player, item: &Item) -> Interaction
         return InteractionResult::Failure("You don't have an active blueprint. Use 'create [item]' first.".to_string());
     }
 
-    if completed {
-        // Finalize
-        if let Some(bp) = player.active_project.take() {
-            player.inventory.add(bp.target_item.clone(), 1);
-            
-            // Skill gain based on item type
-            match bp.target_item {
-                Item::StoneKnife | Item::StoneAxe => player.skills.improve("stonemasonry", 10),
-                Item::Campfire => player.skills.improve("survival", 5),
-                Item::Cordage => player.skills.improve("tailoring", 5),
-                _ => {},
-            }
-
-            return InteractionResult::ActionSuccess {
-                message: format!("You finish crafting the {}. It is ready to use.", bp.target_item.name()),
-                time_cost: 2,
-                energy_cost: 5.0,
-            };
+    if let Some(bp) = state.player.active_project.take() {
+        state.player.inventory.add(bp.target_item.clone(), 1);
+        
+        // Skill gain based on item type
+        match bp.target_item {
+            Item::StoneKnife | Item::StoneAxe => state.player.skills.improve("stonemasonry", 10),
+            Item::Campfire => state.player.skills.improve("survival", 5),
+            Item::Cordage => state.player.skills.improve("tailoring", 5),
+            _ => {},
         }
+
+        return InteractionResult::ActionSuccess {
+            message: format!("You finish crafting the {}. It is ready to use.", bp.target_item.name()),
+            time_cost: 2,
+            energy_cost: 5.0,
+        };
     }
-    
+
     InteractionResult::Failure("Something went wrong with the blueprint.".to_string())
 }
 
-fn handle_foraging(player: &mut Player, tool: &Item) -> InteractionResult {
+fn handle_foraging(state: &mut GameState, _tool: &Item) -> InteractionResult {
     // Basic foraging with hands or knife
     let mut rng = rand::thread_rng();
-    let skill = player.skills.get("foraging");
+    let skill = state.player.skills.get("foraging");
     
     // Check energy
-    if player.energy < 5.0 {
+    if state.player.energy < 5.0 {
         return InteractionResult::Failure("You are too exhausted to forage.".to_string());
     }
 
     // Drops
     let drops = if rng.gen_bool(0.6 + (skill as f64 * 0.005)) {
         // Success
-        player.inventory.add(Item::Stick, 1);
-        if rng.gen_bool(0.3) { player.inventory.add(Item::PlantFiber, 1); }
-        if rng.gen_bool(0.2) { player.inventory.add(Item::Stone, 1); }
-        if rng.gen_bool(0.1) { player.inventory.add(Item::WildBerry, 1); }
+        state.player.inventory.add(Item::Stick, 1);
+        if rng.gen_bool(0.3) { state.player.inventory.add(Item::PlantFiber, 1); }
+        if rng.gen_bool(0.2) { state.player.inventory.add(Item::Stone, 1); }
+        if rng.gen_bool(0.1) { state.player.inventory.add(Item::WildBerry, 1); }
         
-        player.skills.improve("foraging", 1);
+        state.player.skills.improve("foraging", 1);
         
         InteractionResult::ActionSuccess {
             message: "You rummage through the brush and find useful materials.".to_string(),
@@ -530,33 +620,44 @@ fn handle_foraging(player: &mut Player, tool: &Item) -> InteractionResult {
     drops
 }
 
-fn try_chop_firewood(player: &mut Player, wood_shed: &mut WoodShed) -> InteractionResult {
-    if !matches!(player.room, Some(Room::WoodShed)) {
+fn try_chop_firewood(state: &mut GameState) -> InteractionResult {
+    if !matches!(state.player.room, Some(Room::WoodShed)) {
         return InteractionResult::Failure("Go to the wood shed to chop firewood.".to_string());
     }
     // ... (Simplified logic for brevity, using ActionSuccess)
-    if wood_shed.logs > 0 {
-        wood_shed.logs -= 1;
-        player.inventory.add(Item::Firewood, 3);
-        player.skills.improve("woodcutting", 2);
-        InteractionResult::ActionSuccess {
-            message: "You chop a log into firewood.".to_string(),
-            time_cost: 2,
-            energy_cost: 10.0,
+    if let Some(wood_shed) = state.wood_shed_state_mut() {
+        if wood_shed.logs > 0 {
+            wood_shed.logs -= 1;
+            state.player.inventory.add(Item::Firewood, 3);
+            state.player.skills.improve("woodcutting", 2);
+            InteractionResult::ActionSuccess {
+                message: "You chop a log into firewood.".to_string(),
+                time_cost: 2,
+                energy_cost: 10.0,
+            }
+        } else {
+            InteractionResult::Failure("No logs in the shed.".to_string())
         }
     } else {
-        InteractionResult::Failure("No logs in the shed.".to_string())
+        InteractionResult::Failure("The wood shed isn't available right now.".to_string())
     }
 }
 
 // Re-implement tree chopping with ActionSuccess
-fn try_chop_tree(player: &mut Player, trees: &mut Vec<Tree>, map: &WorldMap, wood_shed: &mut WoodShed, cabin: &mut Cabin) -> InteractionResult {
-    // ... (Adapting previous logic) ...
-    // Simplified for this iteration:
-    player.inventory.add(Item::Log, 2);
-    player.inventory.add(Item::Kindling, 1);
-    player.inventory.add(Item::Bark, 1);
-    player.skills.improve("woodcutting", 5);
+fn try_chop_tree(state: &mut GameState, _map: &WorldMap) -> InteractionResult {
+    let player_pos = state.player.position;
+    let Some(tree) = state.objects.find_tree_mut_at(&player_pos) else {
+        return InteractionResult::Failure("There isn't a standing tree right here to chop.".to_string());
+    };
+    if tree.felled {
+        return InteractionResult::Failure("This tree has already been felled.".to_string());
+    }
+
+    tree.felled = true;
+    state.player.inventory.add(Item::Log, 2);
+    state.player.inventory.add(Item::Kindling, 1);
+    state.player.inventory.add(Item::Bark, 1);
+    state.player.skills.improve("woodcutting", 5);
     
     InteractionResult::ActionSuccess {
         message: "You fell a tree! Timber!".to_string(),
@@ -565,33 +666,37 @@ fn try_chop_tree(player: &mut Player, trees: &mut Vec<Tree>, map: &WorldMap, woo
     }
 }
 
-fn handle_add_fuel(player: &mut Player, cabin: &mut Cabin, item: Item) -> InteractionResult {
-    player.inventory.remove(&item, 1);
-    if cabin.fireplace.add_fuel_item(item) {
-        InteractionResult::Success(format!("You add {} to the fire.", item.name()))
-    } else {
-        player.inventory.add(item, 1);
-        InteractionResult::Failure("It won't burn.".to_string())
-    }
-}
-
-fn handle_light_fire(player: &mut Player, cabin: &mut Cabin) -> InteractionResult {
-    if cabin.fireplace.ignite() {
-        InteractionResult::ActionSuccess {
-            message: "You strike a match and the fire catches!".to_string(),
-            time_cost: 0,
-            energy_cost: 0.0,
+fn handle_add_fuel(state: &mut GameState, item: Item) -> InteractionResult {
+    state.player.inventory.remove(&item, 1);
+    if let Some(cabin) = state.cabin_state_mut() {
+        if cabin.fireplace.add_fuel_item(item) {
+            return InteractionResult::Success(format!("You add {} to the fire.", item.name()));
         }
-    } else {
-        InteractionResult::Failure("You need tinder and fuel to start a fire.".to_string())
     }
+    state.player.inventory.add(item, 1);
+    InteractionResult::Failure("It won't burn.".to_string())
 }
 
-fn handle_consumption(player: &mut Player, item: Item) -> InteractionResult {
-    player.inventory.remove(&item, 1);
+fn handle_light_fire(state: &mut GameState) -> InteractionResult {
+    if let Some(cabin) = state.cabin_state_mut() {
+        if cabin.fireplace.ignite() {
+            return InteractionResult::ActionSuccess {
+                message: "You strike a match and the fire catches!".to_string(),
+                time_cost: 0,
+                energy_cost: 0.0,
+            };
+        } else {
+            return InteractionResult::Failure("You need tinder and fuel to start a fire.".to_string());
+        }
+    }
+    InteractionResult::Failure("There's no hearth here.".to_string())
+}
+
+fn handle_consumption(state: &mut GameState, item: Item) -> InteractionResult {
+    state.player.inventory.remove(&item, 1);
     match item {
         Item::Apple => {
-            player.modify_fullness(15.0);
+            state.player.modify_fullness(15.0);
             InteractionResult::Success("You eat the apple.".to_string())
         },
         // ... other items
@@ -600,14 +705,14 @@ fn handle_consumption(player: &mut Player, item: Item) -> InteractionResult {
 }
 
 // New Create command handler
-pub fn try_create(item_name: &str, player: &mut Player) -> InteractionResult {
+pub fn try_create(item_name: &str, state: &mut GameState) -> InteractionResult {
     let target_item = match Item::from_str(item_name) {
         Some(i) => i,
         None => return InteractionResult::Failure(format!("Unknown item '{}'.", item_name)),
     };
 
     if let Some(bp) = Blueprint::new(target_item) {
-        player.active_project = Some(bp.clone());
+        state.player.active_project = Some(bp.clone());
         InteractionResult::Success(format!(
             "You lay out plans for a {}. {}", 
             target_item.name(), 

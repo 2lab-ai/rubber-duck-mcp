@@ -14,19 +14,213 @@ pub struct GameState {
     pub time: WorldTime,
     pub weather: RegionalWeather,
     pub player: Player,
-    pub cabin: Cabin,
-    pub wood_shed: WoodShed,
     pub wildlife: Vec<Wildlife>,
     #[serde(default)]
-    pub trees: Vec<Tree>,
+    pub objects: ObjectRegistry,
     #[serde(default)]
     pub custom_names: HashMap<Item, String>,
     // Runtime state (not critical to save but nice to have)
     #[serde(default)]
     pub pending_messages: Vec<String>,
+    #[serde(default, rename = "cabin")]
+    #[serde(skip_serializing)]
+    legacy_cabin: Option<Cabin>,
+    #[serde(default, rename = "wood_shed")]
+    #[serde(skip_serializing)]
+    legacy_wood_shed: Option<WoodShed>,
+    #[serde(default, rename = "trees")]
+    #[serde(skip_serializing)]
+    legacy_trees: Option<Vec<Tree>>,
 }
 
 impl GameState {
+    pub fn cabin_state(&self) -> Option<&Cabin> {
+        self.objects
+            .find("cabin")
+            .and_then(|p| p.object.as_cabin())
+    }
+
+    pub fn cabin_state_mut(&mut self) -> Option<&mut Cabin> {
+        self.objects
+            .find_mut("cabin")
+            .and_then(|p| p.object.as_cabin_mut())
+    }
+
+    pub fn wood_shed_state(&self) -> Option<&WoodShed> {
+        self.objects
+            .find("wood_shed")
+            .and_then(|p| p.object.as_wood_shed())
+    }
+
+    pub fn wood_shed_state_mut(&mut self) -> Option<&mut WoodShed> {
+        self.objects
+            .find_mut("wood_shed")
+            .and_then(|p| p.object.as_wood_shed_mut())
+    }
+
+    pub fn table_surface(&self) -> Option<&ObjectSurface> {
+        self.objects
+            .find("cabin_table")
+            .and_then(|p| p.object.surface.as_ref())
+    }
+
+    pub fn table_surface_mut(&mut self) -> Option<&mut ObjectSurface> {
+        self.objects
+            .find_mut("cabin_table")
+            .and_then(|p| p.object.surface.as_mut())
+    }
+
+    fn ensure_core_cabin_items(cabin: &mut Cabin) {
+        if !cabin.items.contains(&Item::Kettle) {
+            cabin.items.push(Item::Kettle);
+        }
+        if !cabin.items.contains(&Item::TeaCup) {
+            cabin.items.push(Item::TeaCup);
+        }
+        if !cabin.items.contains(&Item::WildHerbs) {
+            cabin.items.push(Item::WildHerbs);
+        }
+    }
+
+    fn ensure_table_object(&mut self, mut table_items: Vec<Item>) {
+        if let Some(table) = self.objects.find_mut("cabin_table") {
+            if let Some(surface) = table.object.surface.as_mut() {
+                surface.items.extend(table_items.drain(..));
+                surface.supports_mounts = true;
+                if surface.capacity.is_none() {
+                    surface.capacity = Some(8);
+                }
+            } else {
+                table.object.surface = Some(ObjectSurface {
+                    items: table_items,
+                    capacity: Some(8),
+                    supports_mounts: true,
+                });
+            }
+            return;
+        }
+
+        let mut table_obj = WorldObject::new(ObjectKind::Table);
+        if let Some(surface) = table_obj.surface.as_mut() {
+            surface.items.extend(table_items.drain(..));
+            surface.capacity = Some(8);
+            surface.supports_mounts = true;
+        }
+        self.objects
+            .add("cabin_table", Position::new(6, 5), table_obj);
+    }
+
+    fn ensure_duck_present(&mut self) {
+        let duck = Item::RubberDuck;
+        let duck_on_table = self
+            .table_surface()
+            .map(|s| s.items.contains(&duck))
+            .unwrap_or(false);
+        let duck_in_cabin = self
+            .cabin_state()
+            .map(|c| c.items.contains(&duck) || c.table_items.contains(&duck))
+            .unwrap_or(false);
+        let duck_with_player = self.player.inventory.has(&duck, 1);
+
+        if duck_on_table || duck_in_cabin || duck_with_player {
+            return;
+        }
+
+        if let Some(surface) = self.table_surface_mut() {
+            surface.items.push(duck);
+            return;
+        }
+
+        if let Some(cabin) = self.cabin_state_mut() {
+            cabin.items.push(duck);
+        }
+    }
+
+    fn bootstrap_structures(&mut self) {
+        let mut cabin_state = self.legacy_cabin.take().unwrap_or_else(Cabin::new);
+        Self::ensure_core_cabin_items(&mut cabin_state);
+        let mut table_items = std::mem::take(&mut cabin_state.table_items);
+
+        if self.objects.find("cabin").is_none() {
+            self.objects.add(
+                "cabin",
+                Position::new(6, 5),
+                WorldObject::new(ObjectKind::Cabin(cabin_state)),
+            );
+        } else if let Some(po) = self.objects.find_mut("cabin") {
+            if let Some(cabin) = po.object.as_cabin_mut() {
+                Self::ensure_core_cabin_items(cabin);
+                if table_items.is_empty() && !cabin.table_items.is_empty() {
+                    table_items.extend(cabin.table_items.iter().copied());
+                }
+            }
+        }
+
+        let wood_shed_state = self
+            .legacy_wood_shed
+            .take()
+            .unwrap_or_else(WoodShed::new);
+        if self.objects.find("wood_shed").is_none() {
+            self.objects.add(
+                "wood_shed",
+                Position::new(5, 4),
+                WorldObject::new(ObjectKind::WoodShed(wood_shed_state)),
+            );
+        } else if let Some(po) = self.objects.find_mut("wood_shed") {
+            if po.object.as_wood_shed().is_none() {
+                po.object.kind = ObjectKind::WoodShed(wood_shed_state);
+            }
+        }
+
+        self.ensure_table_object(table_items);
+        self.ensure_duck_present();
+    }
+
+    fn ensure_tree_objects_from_legacy(&mut self) {
+        if let Some(legacy) = self.legacy_trees.take() {
+            for mut tree in legacy {
+                tree.apply_kind_defaults();
+                let pos = tree.position;
+                let id = format!("tree-{}-{}-legacy", pos.row, pos.col);
+                self.objects
+                    .add(id, pos, WorldObject::new(ObjectKind::Tree(tree)));
+            }
+        }
+    }
+
+    pub fn take_table_item(&mut self, item: &Item) -> bool {
+        if let Some(surface) = self.table_surface_mut() {
+            return surface.take_item(item);
+        }
+        if let Some(cabin) = self.cabin_state_mut() {
+            return cabin.take_table_item(item);
+        }
+        false
+    }
+
+    pub fn add_table_item(&mut self, item: Item) {
+        if let Some(surface) = self.table_surface_mut() {
+            surface.add_item(item);
+            return;
+        }
+        if let Some(cabin) = self.cabin_state_mut() {
+            cabin.add_table_item(item);
+        }
+    }
+
+    pub fn table_item_names(&self) -> Vec<String> {
+        if let Some(surface) = self.table_surface() {
+            return surface
+                .items
+                .iter()
+                .map(|i| i.name().to_string())
+                .collect();
+        }
+        self.cabin_state()
+            .map(|c| c.table_item_names())
+            .unwrap_or_default()
+    }
+
     /// Create a new game state with initial values
     pub fn new(map: &WorldMap) -> Self {
         let mut rng = rand::thread_rng();
@@ -35,13 +229,15 @@ impl GameState {
             time: WorldTime::new(),
             weather: RegionalWeather::new(),
             player: Player::new(),
-            cabin: Cabin::new(),
-            wood_shed: WoodShed::new(),
             wildlife: spawn_wildlife(),
-            trees: Tree::default_trees(),
+            objects: ObjectRegistry::new(),
             custom_names: HashMap::new(),
             pending_messages: Vec::new(),
+            legacy_cabin: None,
+            legacy_wood_shed: None,
+            legacy_trees: None,
         };
+        state.bootstrap_structures();
         state.seed_tree_population(map, &mut rng, 10);
         state
     }
@@ -66,43 +262,19 @@ impl GameState {
             match Self::load(path) {
                 Ok(mut state) => {
                     tracing::info!("Loaded existing game state from {:?}", path);
-                    // Auto-spawn wildlife if empty
                     if state.wildlife.is_empty() {
                         tracing::info!("Wildlife was empty, spawning new wildlife");
                         state.wildlife = spawn_wildlife();
                     }
-                    if state.trees.is_empty() {
-                        tracing::info!("Tree list missing or empty, seeding defaults");
-                        state.trees = Tree::default_trees();
-                    }
-                    for t in &mut state.trees {
-                        t.apply_kind_defaults();
-                    }
-                    let mut rng = rand::thread_rng();
-                    state.seed_tree_population(map, &mut rng, 10);
-                    // Ensure key cabin items exist for new features
-                    if !state.cabin.items.contains(&Item::Kettle) {
-                        tracing::info!("Adding missing kettle to cabin inventory");
-                        state.cabin.items.push(Item::Kettle);
-                    }
-                    if !state.cabin.items.contains(&Item::TeaCup) {
-                        tracing::info!("Adding missing tea cup to cabin inventory");
-                        state.cabin.items.push(Item::TeaCup);
-                    }
-                    if !state.cabin.items.contains(&Item::WildHerbs) {
-                        tracing::info!("Adding starter herbs to cabin inventory");
-                        state.cabin.items.push(Item::WildHerbs);
-                    }
                     if state.custom_names.is_empty() {
                         state.custom_names = HashMap::new();
                     }
-                    if !state.cabin.table_items.contains(&Item::RubberDuck)
-                        && !state.cabin.items.contains(&Item::RubberDuck)
-                        && !state.player.inventory.has(&Item::RubberDuck, 1)
-                    {
-                        tracing::info!("Placing rubber duck on the cabin table");
-                        state.cabin.table_items.push(Item::RubberDuck);
-                    }
+
+                    state.ensure_tree_objects_from_legacy();
+                    state.bootstrap_structures();
+
+                    let mut rng = rand::thread_rng();
+                    state.seed_tree_population(map, &mut rng, 10);
                     state
                 }
                 Err(e) => {
@@ -133,8 +305,10 @@ impl GameState {
         }
 
         // Update fireplace and collect any warnings
-        if let Some(fire_msg) = self.cabin.fireplace.update() {
-            self.pending_messages.push(fire_msg);
+        if let Some(cabin) = self.cabin_state_mut() {
+            if let Some(fire_msg) = cabin.fireplace.update() {
+                self.pending_messages.push(fire_msg);
+            }
         }
 
         let mut rng = rand::thread_rng();
@@ -163,9 +337,10 @@ impl GameState {
     }
 
     fn update_player_comfort(&mut self) {
-        let indoor = self.player.is_indoor();
         let fire_heat = if matches!(self.player.room, Some(Room::CabinMain)) {
-            self.cabin.fireplace.heat_output()
+            self.cabin_state()
+                .map(|c| c.fireplace.heat_output())
+                .unwrap_or(0.0)
         } else {
             0.0
         };
@@ -200,7 +375,7 @@ impl GameState {
     }
 
     fn living_tree_count(&self) -> usize {
-        self.trees.iter().filter(|t| !t.felled).count()
+        self.objects.living_tree_count()
     }
 
     fn find_free_tree_spot(
@@ -216,7 +391,12 @@ impl GameState {
             if !pos.is_valid() {
                 continue;
             }
-            if self.trees.iter().any(|t| t.position == pos) {
+            if self
+                .objects
+                .objects_at(&pos)
+                .iter()
+                .any(|p| matches!(p.object.kind, ObjectKind::Tree(_)) || p.object.anchored)
+            {
                 continue;
             }
             if let Some(tile) = map.get_tile(row as usize, col as usize) {
@@ -241,8 +421,11 @@ impl GameState {
             return false;
         };
         let kind = self.random_tree_kind(rng);
-        let tree = Tree::with_random_fruit(pos, kind, rng);
-        self.trees.push(tree);
+        let mut tree = Tree::with_random_fruit(pos, kind, rng);
+        tree.apply_kind_defaults();
+        let id = format!("tree-{}-{}-{}", pos.row, pos.col, self.objects.placed.len());
+        self.objects
+            .add(id, pos, WorldObject::new(ObjectKind::Tree(tree)));
         true
     }
 
@@ -255,9 +438,8 @@ impl GameState {
     }
 
     fn update_trees(&mut self, map: &WorldMap, rng: &mut impl Rng) {
-        for tree in &mut self.trees {
-            tree.tick_growth(rng);
-        }
+        self.objects
+            .for_each_tree_mut(|tree, _| tree.tick_growth(rng));
         if self.living_tree_count() <= 5 {
             let _ = self.spawn_tree(map, rng);
         }
@@ -286,7 +468,15 @@ impl GameState {
             return true;
         }
         if matches!(self.player.room, Some(Room::CabinMain)) {
-            if self.cabin.items.contains(item) || self.cabin.table_items.contains(item) {
+            let in_cabin = self
+                .cabin_state()
+                .map(|c| c.items.contains(item) || c.table_items.contains(item))
+                .unwrap_or(false);
+            let on_table = self
+                .table_surface()
+                .map(|s| s.items.contains(item))
+                .unwrap_or(false);
+            if in_cabin || on_table {
                 return true;
             }
         }

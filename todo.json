@@ -3,12 +3,23 @@
   "version": "2.1.0",
   "tasks": [
     {
+      "id": 0,
+      "category": "System Core: Tile & Object",
+      "title": "지도와 물체",
+      "description": [ 
+        "모든 타일에는 오브젝트가 올라가 있을수 있음. 기존에 캐빈이랑 wood shed처럼 특수 처리가 아니라 타일에 오브젝트들로 구현해야함. 그리고 일부 큰 오브젝트들 (책상, 벽)등은 다른 물체를 올리거나 붙일 수 있음.",
+        "시야: 대부분의 물체는 바로 한칸 건너에서 볼수 있음. 큰 물체는 두칸 혹은 더 멀리서도 볼 수 있음. 나무는 3칸 건너서 볼 수 있음. 캐빈은 5칸 멀리서도 볼수 있음. 캐빈도 오브젝트임. 모든 건 타일과 오브젝트로 이루어져 있음."
+      ],
+      "priority": "Critical",
+      "status": "pending"
+    },
+    {
       "id": 1,
-      "category": "System Core",
+      "category": "System Core: Blueprint",
       "title": "Blueprint Entity System",
       "description": "Create 'Blueprint' struct that holds: target_item, required_materials(Map), current_materials(Map), time_cost.",
       "priority": "Critical",
-      "status": "pending"
+      "status": "work in progress"
     },
     {
       "id": 2,

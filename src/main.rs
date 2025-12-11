@@ -20,7 +20,7 @@ fn main() -> Result<()> {
         .with_target(false)
         .init();
 
-    tracing::info!("Rubber Duck MCP Server v0.1.0");
+    tracing::info!("Rubber Duck MCP Server v{}", env!("CARGO_PKG_VERSION"));
     tracing::info!("A text-based healing nature simulation");
 
     // Determine state file path
@@ -161,6 +161,7 @@ const palette = {
   Lake:'#5aa3ff',
   MixedForest:'#6ec06e',
   Path:'#d2a676',
+   Clearing:'#e0d9c7',
   Cabin:'#ffd166',
   WoodShed:'#f48fb1',
   Player:'#ffda5a'
@@ -185,6 +186,7 @@ function renderMap(data) {
         switch (tile.tile) {
           case 'Cabin': return 'C';
           case 'WoodShed': return 'W';
+          case 'Clearing': return '.';
           case 'Path': return '#';
           case 'Lake': return '~';
           case 'Forest': return tile.biome === 'WinterForest' ? '^' : tile.biome === 'Desert' ? '.' : 'T';
@@ -249,18 +251,38 @@ struct PositionView {
 }
 
 fn build_state_json(state_path: &PathBuf, map: &world::WorldMap) -> String {
+    let loaded_state = persistence::GameState::load(state_path).ok();
+    let object_view = loaded_state.as_ref().map(|s| &s.objects);
+
     let mut tiles = Vec::with_capacity(world::map::MAP_HEIGHT);
     for r in 0..world::map::MAP_HEIGHT {
         let mut row = Vec::with_capacity(world::map::MAP_WIDTH);
         for c in 0..world::map::MAP_WIDTH {
             if let Some(t) = map.get_tile(r, c) {
-                let tile = match t.tile_type {
-                    world::TileType::Cabin => "Cabin",
+                let mut tile = match t.tile_type {
                     world::TileType::Lake => "Lake",
                     world::TileType::Path => "Path",
-                    world::TileType::WoodShed => "WoodShed",
+                    world::TileType::Clearing => "Clearing",
                     world::TileType::Forest(_) => "Forest",
                 }.to_string();
+
+                if let Some(objects) = &object_view {
+                    let pos = world::Position::new(r as i32, c as i32);
+                    if objects
+                        .objects_at(&pos)
+                        .iter()
+                        .any(|o| matches!(o.object.kind, world::ObjectKind::Cabin(_)))
+                    {
+                        tile = "Cabin".to_string();
+                    } else if objects
+                        .objects_at(&pos)
+                        .iter()
+                        .any(|o| matches!(o.object.kind, world::ObjectKind::WoodShed(_)))
+                    {
+                        tile = "WoodShed".to_string();
+                    }
+                }
+
                 row.push(TileView { biome: t.biome.name().to_string(), tile });
             }
         }
@@ -268,7 +290,7 @@ fn build_state_json(state_path: &PathBuf, map: &world::WorldMap) -> String {
     }
 
     let mut player_pos = None;
-    if let Ok(state) = persistence::GameState::load(state_path) {
+    if let Some(state) = loaded_state.as_ref() {
         if let Some((row, col)) = state.player.position.as_usize() {
             player_pos = Some(PositionView { row, col });
         }

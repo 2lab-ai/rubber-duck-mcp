@@ -1,6 +1,7 @@
 use rand::Rng;
 use crate::entity::{Player, Room, Item, Cabin, WoodShed, FireState, Tree, TreeType};
 use crate::world::{WorldMap, TileType};
+use crate::persistence::GameState;
 
 pub enum CraftResult {
     Success(String),
@@ -261,18 +262,14 @@ pub fn use_item(
     )
 }
 
-pub fn kick_tree(
-    player: &mut Player,
-    cabin: &mut Cabin,
-    trees: &mut Vec<Tree>,
-) -> CraftResult {
-    if player.room.is_some() {
+pub fn kick_tree(state: &mut GameState) -> CraftResult {
+    if state.player.room.is_some() {
         return CraftResult::Failure(
             "You need to be outside near a tree to kick it.".to_string()
         );
     }
 
-    let Some(tree) = find_near_tree(player, trees) else {
+    let Some(tree) = state.objects.find_tree_mut_at(&state.player.position) else {
         return CraftResult::Failure("There's no tree close enough to kick.".to_string());
     };
 
@@ -284,13 +281,16 @@ pub fn kick_tree(
     let mut msg = String::from("You give the trunk a solid kick.");
 
     if tree.has_fruit() && rng.gen_bool(0.55) {
-        if let Some(note) = collect_fruit_drop(tree, player, cabin, 1) {
-            msg.push(' ');
-            msg.push_str(&note);
+        let dropped = tree.take_fruit(1);
+        if dropped > 0 {
+            if let Some(fruit_item) = tree.fruit_item() {
+                state.player.inventory.add(fruit_item, dropped as u32);
+                msg.push_str(" A piece of fruit drops into your hands.");
+            }
         }
     } else if rng.gen_bool(0.25) {
         msg.push_str(" The impact stings your toes, but the tree barely notices.");
-        player.modify_mood(-1.0);
+        state.player.modify_mood(-1.0);
     } else {
         msg.push_str(" It shudders, scattering dust and bark.");
     }
