@@ -50,18 +50,40 @@ try {
     run(`powershell -Command "Expand-Archive -Path  -DestinationPath  -Force"`);
   } else {
     run(`curl -fL ${downloadUrl} -o "${archivePath}"`);
-    run(`tar -xJf "${archivePath}" -C "${nativeDir}"`);
+    run(`tar -xJf "${archivePath}" -C "${nativeDir}" --strip-components=1`);
   }
 
-  const binPath = path.join(nativeDir, binName + (isWindows ? ".exe" : ""));
-  if (!fs.existsSync(binPath)) {
+  const ext = isWindows ? ".exe" : "";
+  const finalBinPath = path.join(nativeDir, binName + ext);
+
+  function findBinary(start) {
+    for (const entry of fs.readdirSync(start, { withFileTypes: true })) {
+      const full = path.join(start, entry.name);
+      if (entry.isFile() && entry.name === binName + ext) {
+        return full;
+      }
+      if (entry.isDirectory()) {
+        const found = findBinary(full);
+        if (found) return found;
+      }
+    }
+    return null;
+  }
+
+  const located = findBinary(nativeDir);
+  if (!located) {
     throw new Error("Binary not found after extraction");
   }
-  if (!isWindows) {
-    fs.chmodSync(binPath, 0o755);
+
+  if (located !== finalBinPath) {
+    fs.copyFileSync(located, finalBinPath);
   }
 
-  console.log(`Installed ${binName} ${version} -> ${binPath}`);
+  if (!isWindows) {
+    fs.chmodSync(finalBinPath, 0o755);
+  }
+
+  console.log(`Installed ${binName} ${version} -> ${finalBinPath}`);
 } catch (err) {
   console.error(`Failed to install binary: ${err.message}`);
   process.exit(1);
