@@ -419,7 +419,7 @@ impl McpServer {
             &item,
             target.as_deref(),
             &mut self.world.state,
-            &self.world.map,
+            &mut self.world.map,
         );
 
         match result {

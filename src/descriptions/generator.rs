@@ -461,6 +461,12 @@ impl DescriptionGenerator {
                     .any(|o| matches!(o.object.kind, ObjectKind::WoodShed(_)))
                 {
                     exit_desc = format!("{}: wood shed", dir_str(dir));
+                } else if objects_here
+                    .iter()
+                    .any(|o| o.id == "east_cave_entrance"
+                        || matches!(&o.object.kind, ObjectKind::GenericStructure(name) if name.to_lowercase().contains("cave")))
+                {
+                    exit_desc = format!("{}: a dark cave entrance", dir_str(dir));
                 }
 
                 exits.push(exit_desc);

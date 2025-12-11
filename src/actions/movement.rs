@@ -23,6 +23,19 @@ pub fn try_move(
 
     let new_pos = player.position.move_in_direction(dir);
 
+    // Special-case: prevent deeper cave exploration past the entrance for now
+    if objects
+        .objects_at(&player.position)
+        .iter()
+        .any(|o| o.id == "east_cave_entrance")
+        && matches!(dir, Direction::East)
+    {
+        return MoveResult::Blocked(
+            "The cave beyond is pitch black. Without a reliable light source and proper gear, you don't dare go any deeper."
+                .to_string(),
+        );
+    }
+
     // Check bounds
     if !new_pos.is_valid() {
         return MoveResult::Blocked(
@@ -185,6 +198,26 @@ pub fn try_enter(
                 player.enter_room(Room::WoodShed);
                 return MoveResult::RoomTransition("You enter the small wood shed.".to_string());
             }
+        }
+    }
+
+    // Check for entering the east-side cave entrance from outside
+    if player.room.is_none() && normalized.contains("cave") {
+        if let Some(cave) = objects.find("east_cave_entrance") {
+            let cave_pos = cave.position;
+            let distance = player.position.distance_to(&cave_pos);
+            if distance > 1.5 {
+                return MoveResult::InvalidDirection(
+                    "You're too far from the cave entrance to step inside.".to_string(),
+                );
+            }
+
+            player.position = cave_pos;
+            player.mark_visited();
+            return MoveResult::Success(
+                "You step into the mouth of the cave. Just beyond the entrance, darkness swallows the passage; without proper light and gear, you decide not to go any deeper yet."
+                    .to_string(),
+            );
         }
     }
 

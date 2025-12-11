@@ -1,0 +1,23 @@
+{
+  "task_id": 16,
+  "scope": "Interaction: 카드 케이스 & 흩뿌리기",
+  "goal": "Add a card case item that starts with a 52-card deck, supports opening/closing, neat dumping and refilling of the deck, and a playful scatter event with an achievement the first time it is thrown.",
+  "decisions": [
+    "Represent the deck as a lightweight counter on GameState (card_case_cards_inside) plus a generic PlayingCard item on the ground or in inventory, rather than tracking 52 unique cards.",
+    "Treat the card case as a normal inventory item that can be opened/closed via the open/close commands or via use, and use the existing LocationItems system for cards spilled onto tiles.",
+    "Wire scattering through drop card case outdoors: dropping the case flings its internal cards randomly across the 3x3 area around the player, and only the first such event unlocks an achievement-style message.",
+    "Let players refill the case either by using the open case while cards are on the ground (scooping up to 52) or by using individual playing cards on the case to tuck them back in one by one."
+  ],
+  "plan": [
+    "Extend the Item enum with CardCase and PlayingCard entries, including names, aliases, descriptions, and reasonable weights.",
+    "Add card-case state to GameState (deck count, open flag, scatter achievement) and ensure both new games and existing saves get a seeded case with a full deck.",
+    "Place the card case in the cabin (table) and implement open/close handling plus use-based logic for dumping the deck onto the ground or scooping it back in.",
+    "Special-case dropping the card case outdoors to scatter its cards randomly around the current tile and surface the one-time achievement message.",
+    "Update todo tracking once the feature compiles and basic interactions (open/close, spill, scoop, scatter, individual card insertion) work."
+  ],
+  "notes": [
+    "Cards are intentionally anonymous; suits and values are out of scope for this task.",
+    "The achievement is purely narrative and does not affect stats or progression, but it should feel like a fun little reward the first time the player flings the deck."
+  ]
+}
+

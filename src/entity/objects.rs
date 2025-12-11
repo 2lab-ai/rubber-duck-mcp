@@ -52,6 +52,10 @@ pub enum Item {
     // Structures / Placeables (as items for blueprint targets)
     Campfire,
 
+    // Play / misc
+    CardCase,
+    PlayingCard,
+
     // Cabin items
     OldBook,
     StrangeCompass,
@@ -69,7 +73,7 @@ pub enum Item {
     RubberDuck,
 }
 
-const ALL_ITEMS: [Item; 54] = [
+const ALL_ITEMS: [Item; 56] = [
     Item::Axe,
     Item::StoneAxe,
     Item::Knife,
@@ -110,6 +114,8 @@ const ALL_ITEMS: [Item; 54] = [
     Item::DeathNote,
     Item::BookOfFishing,
     Item::Campfire,
+    Item::CardCase,
+    Item::PlayingCard,
     Item::OldBook,
     Item::StrangeCompass,
     Item::AncientMap,
@@ -169,6 +175,8 @@ impl Item {
             Item::DeathNote => "death note",
             Item::BookOfFishing => "book of fishing",
             Item::Campfire => "campfire",
+            Item::CardCase => "card case",
+            Item::PlayingCard => "playing card",
             Item::OldBook => "old leather-bound book",
             Item::StrangeCompass => "strange compass",
             Item::AncientMap => "ancient map",
@@ -228,6 +236,8 @@ impl Item {
             Item::DeathNote => &["death note", "black notebook", "cursed book"],
             Item::BookOfFishing => &["fishing book", "book of fishing", "angler guide"],
             Item::Campfire => &["fire", "fire pit"],
+            Item::CardCase => &["card case", "case", "deck case"],
+            Item::PlayingCard => &["card", "playing card", "poker card"],
             Item::OldBook => &["book", "old book", "leather-bound book"],
             Item::StrangeCompass => &["compass", "odd compass"],
             Item::AncientMap => &["map", "weathered map", "old map"],
@@ -298,6 +308,8 @@ impl Item {
             Item::CleanWater => "Clear, boiled water that looks safe to drink.",
             Item::CookedFish => "Tender cooked fish, still steaming gently.",
             Item::CookedBerries => "Roasted berries that smell sweet and tart.",
+            Item::CardCase => "A worn leather card case that rattles softly when moved.",
+            Item::PlayingCard => "A single playing card, edges a little frayed.",
             _ => "A useful item.",
         }
     }
@@ -323,6 +335,8 @@ impl Item {
             Item::CookedBerries => 0.2,
             Item::FishingRod => 1.0,
             Item::Raft => 8.0,
+            Item::CardCase => 0.2,
+            Item::PlayingCard => 0.01,
             _ => 0.1,
         }
     }
@@ -571,7 +585,7 @@ impl Cabin {
                 Item::Kettle,
                 Item::WildHerbs,
             ],
-            table_items: vec![Item::RubberDuck],
+            table_items: vec![Item::RubberDuck, Item::CardCase],
             book_ids: Vec::new(),
         }
     }

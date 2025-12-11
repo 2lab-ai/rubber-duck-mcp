@@ -1,0 +1,23 @@
+{
+  "task_id": 15,
+  "scope": "Exploration: 동쪽 동굴 입구",
+  "goal": "Add a visible cave entrance on the eastern winter forest edge, with basic enter behavior and fog-of-war-compatible mapping for the cave mouth.",
+  "decisions": [
+    "Represent the cave mouth as a GenericStructure object anchored on a winter forest tile near the eastern edge of the map, instead of introducing a full cave biome yet.",
+    "Keep cave logic lightweight for now: entering only moves the player onto the entrance tile and narrates a dark interior, reserving deeper cave mapping for a later task.",
+    "Use the existing visited set and map JSON to ensure the cave entrance participates in fog-of-war, and highlight it both in local descriptions and on the web map glyphs.",
+    "Bootstrap the cave entrance via bootstrap_structures so existing saves automatically gain the new object without breaking compatibility."
+  ],
+  "plan": [
+    "Choose a fixed winter forest coordinate on the eastern side of the world and define it as the cave entrance anchor.",
+    "Add a cave entrance object at that coordinate during game state bootstrap, ensuring it appears in object-based descriptions and visibility checks.",
+    "Extend the enter command so that enter cave (or similar text) moves the player onto the entrance tile and describes the dark interior while blocking deeper progress.",
+    "Tag the cave entrance tile in the web map state JSON and render a distinct glyph so the entrance is easy to spot once discovered.",
+    "Run build/tests and then update todo.json with status and a short progress note once everything compiles and basic interactions behave as expected."
+  ],
+  "notes": [
+    "The cave currently has no separate interior room system; deeper exploration is narrative-only and will require a later task to add an actual cave map or room graph.",
+    "Save compatibility is important: if older saves lack the cave object, bootstrap_structures should quietly add it on load without touching other structures or items."
+  ]
+}
+

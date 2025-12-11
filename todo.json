@@ -130,7 +130,10 @@
         "지도/시야 시스템에 동굴 입구를 표시하고, 내부는 방문 전까지 fog 처리."
       ],
       "priority": "Low",
-      "status": "todo"
+      "status": "completed",
+      "progress": [
+        "Anchored a cave entrance object on the eastern winter forest edge, wired enter cave to move the player onto the mouth while narratively blocking deeper exploration without light/gear, and exposed the entrance as a distinct glyph on the web map with normal fog-of-war based on visited tiles."
+      ]
     },
     {
       "id": 16,
@@ -143,7 +146,10 @@
         "카드 흩뿌리기 이벤트를 최초로 하면 업적 해금(유머 메시지 포함)."
       ],
       "priority": "Low",
-      "status": "todo"
+      "status": "completed",
+      "progress": [
+        "Introduced a cabin card case with an internal 52-card counter and generic playing card items; the case can be opened/closed, used to dump or scoop the whole deck, dropped outdoors to scatter cards randomly around the player with a one-time '52 Pickup' achievement message, and individual cards can be tucked back into the case up to a full deck."
+      ]
     },
     {
       "id": 0,

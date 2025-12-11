@@ -208,6 +208,7 @@ function renderMap(data) {
           case 'Clearing': return '.';
           case 'Path': return '#';
           case 'Lake': return '~';
+          case 'CaveEntrance': return '>';
           case 'Forest': return tile.biome === 'WinterForest' ? '^' : tile.biome === 'Desert' ? '.' : 'T';
           default: return '.';
         }
@@ -311,6 +312,13 @@ fn build_state_json(state_path: &PathBuf, map: &world::WorldMap) -> String {
                         .any(|o| matches!(o.object.kind, world::ObjectKind::WoodShed(_)))
                     {
                         tile = "WoodShed".to_string();
+                    } else if objects
+                        .objects_at(&world_pos)
+                        .iter()
+                        .any(|o| o.id == "east_cave_entrance"
+                            || matches!(&o.object.kind, world::ObjectKind::GenericStructure(name) if name.to_lowercase().contains("cave")))
+                    {
+                        tile = "CaveEntrance".to_string();
                     }
                 }
 

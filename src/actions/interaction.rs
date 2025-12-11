@@ -140,6 +140,22 @@ fn random_duck_phrase(rng: &mut impl rand::Rng) -> String {
 
 pub fn try_open(target: &str, state: &mut GameState) -> InteractionResult {
     let normalized = target.to_lowercase();
+    if normalized.contains("card") || normalized.contains("case") {
+        if !state.player.inventory.has(&Item::CardCase, 1) {
+            return InteractionResult::Failure(
+                "You need to be holding the card case to open it.".to_string(),
+            );
+        }
+        if state.card_case_open {
+            return InteractionResult::Failure("The card case is already open.".to_string());
+        }
+        state.card_case_open = true;
+        return InteractionResult::Success(
+            "You flip open the card case. A neat stack of cards waits inside."
+                .to_string(),
+        );
+    }
+
     let cabin_pos = match state.objects.find("cabin") {
         Some(obj) => obj.position,
         None => return InteractionResult::Failure("You don't see a cabin to open.".to_string()),
@@ -171,6 +187,22 @@ pub fn try_open(target: &str, state: &mut GameState) -> InteractionResult {
 
 pub fn try_close(target: &str, state: &mut GameState) -> InteractionResult {
     let normalized = target.to_lowercase();
+    if normalized.contains("card") || normalized.contains("case") {
+        if !state.player.inventory.has(&Item::CardCase, 1) {
+            return InteractionResult::Failure(
+                "You need to be holding the card case to close it.".to_string(),
+            );
+        }
+        if !state.card_case_open {
+            return InteractionResult::Failure("The card case is already closed.".to_string());
+        }
+        state.card_case_open = false;
+        return InteractionResult::Success(
+            "You snap the card case shut, keeping the deck contained."
+                .to_string(),
+        );
+    }
+
     let cabin_pos = match state.objects.find("cabin") {
         Some(obj) => obj.position,
         None => return InteractionResult::Failure("You don't see a cabin to close.".to_string()),
@@ -411,7 +443,41 @@ pub fn try_drop(item_name: &str, state: &mut GameState, map: &mut WorldMap) -> I
         None => {
             if let Some((r, c)) = state.player.position.as_usize() {
                 if let Some(tile) = map.get_tile_mut(r, c) {
-                    tile.items.add(item.clone(), 1);
+                    if item == Item::CardCase {
+                        // Drop the card case itself on this tile
+                        tile.items.add(Item::CardCase, 1);
+
+                        // Scatter any cards currently inside the case around this tile
+                        let cards_to_scatter = state.card_case_cards_inside.min(52);
+                        state.card_case_cards_inside = 0;
+                        state.card_case_open = false;
+
+                        if cards_to_scatter > 0 {
+                            let pos = state.player.position;
+                            let mut rng = rand::thread_rng();
+                            let mut positions = Vec::new();
+                            for dr in -1..=1 {
+                                for dc in -1..=1 {
+                                    let p = Position::new(pos.row + dr, pos.col + dc);
+                                    if let Some((rr, cc)) = p.as_usize() {
+                                        positions.push((rr, cc));
+                                    }
+                                }
+                            }
+                            if !positions.is_empty() {
+                                for _ in 0..cards_to_scatter {
+                                    let &(rr, cc) =
+                                        positions.get(rng.gen_range(0..positions.len())).unwrap();
+                                    if let Some(t) = map.get_tile_mut(rr, cc) {
+                                        t.items.add(Item::PlayingCard, 1);
+                                    }
+                                }
+                            }
+                        }
+
+                    } else {
+                        tile.items.add(item.clone(), 1);
+                    }
                 } else {
                     // Failed to place, return item
                     state.player.inventory.add(item.clone(), 1);
@@ -428,7 +494,24 @@ pub fn try_drop(item_name: &str, state: &mut GameState, map: &mut WorldMap) -> I
         }
         _ => {}
     }
-    InteractionResult::ItemLost(item.clone(), format!("You set down the {}.", item.name()))
+    if item == Item::CardCase {
+        let first_scatter = !state.card_scatter_achievement;
+        if first_scatter {
+            state.card_scatter_achievement = true;
+        }
+        let mut message =
+            "You hurl the card case; cards explode into a chaotic ring around you."
+                .to_string();
+        if first_scatter {
+            message.push(' ');
+            message.push_str(
+                "(Achievement unlocked: 52 Pickup. Sometimes you have to let things fly.)",
+            );
+        }
+        InteractionResult::ItemLost(item.clone(), message)
+    } else {
+        InteractionResult::ItemLost(item.clone(), format!("You set down the {}.", item.name()))
+    }
 }
 
 pub fn examine(target: &str, state: &GameState) -> String {
@@ -463,7 +546,12 @@ pub fn examine(target: &str, state: &GameState) -> String {
 
     if normalized.contains("book") || normalized.contains("note") || normalized.contains("책") {
         if let Some(book) = state.accessible_book(&normalized) {
-            return book.full_text();
+            let page_info = if book.pages.is_empty() {
+                "no pages yet".to_string()
+            } else {
+                format!("{} page(s)", book.pages.len())
+            };
+            return format!("Book [{}]: {} ({})", book.id, book.title, page_info);
         }
     }
 
@@ -537,7 +625,7 @@ pub fn try_use(
     item_name: &str,
     target_name: Option<&str>,
     state: &mut GameState,
-    map: &WorldMap,
+    map: &mut WorldMap,
 ) -> InteractionResult {
     let item_query = item_name.trim();
     let item_query_lower = item_query.to_lowercase();
@@ -594,11 +682,50 @@ pub fn try_use(
         return InteractionResult::Failure(format!("You don't have a {}.", item.name()));
     }
 
+    if item == Item::CardCase {
+        return handle_card_case_use(state, map, target_str);
+    }
+
+    if item == Item::PlayingCard {
+        if let Some(target) = target_str {
+            if target.contains("case") || target.contains("card") {
+                if !state.player.inventory.has(&Item::CardCase, 1) {
+                    return InteractionResult::Failure(
+                        "You need to be holding the card case to tuck this card away."
+                            .to_string(),
+                    );
+                }
+                if state.card_case_cards_inside >= 52 {
+                    return InteractionResult::Failure(
+                        "The card case is already full; you can't squeeze in another card."
+                            .to_string(),
+                    );
+                }
+                if !state.player.inventory.remove(&Item::PlayingCard, 1) {
+                    return InteractionResult::Failure(
+                        "You fumble and nearly drop the card; best try again more carefully."
+                            .to_string(),
+                    );
+                }
+                state.card_case_cards_inside =
+                    (state.card_case_cards_inside.saturating_add(1)).min(52);
+                return InteractionResult::Success(
+                    "You slide the card neatly back into the case."
+                        .to_string(),
+                );
+            }
+        }
+        return InteractionResult::Failure(
+            "You flick the card between your fingers. Maybe use it with the card case?"
+                .to_string(),
+        );
+    }
+
     if matches!(
         item,
         Item::Book | Item::TutorialBook | Item::OldBook | Item::DeathNote | Item::BookOfFishing
     ) {
-        return handle_book_use(state, &item, target_str);
+        return handle_book_use(state, map, &item, target_str);
     }
     if item == Item::BlankBook {
         return InteractionResult::Failure(
@@ -909,6 +1036,112 @@ pub fn try_use(
     ))
 }
 
+fn handle_card_case_use(
+    state: &mut GameState,
+    map: &mut WorldMap,
+    target: Option<&str>,
+) -> InteractionResult {
+    let pos = state.player.position;
+    let Some((r, c)) = pos.as_usize() else {
+        return InteractionResult::Failure(
+            "You feel strangely ungrounded; the card case slips in your hands.".to_string(),
+        );
+    };
+
+    let Some(tile) = map.get_tile_mut(r, c) else {
+        return InteractionResult::Failure(
+            "You can't quite find space here to lay out cards.".to_string(),
+        );
+    };
+
+    let cards_on_ground = tile
+        .items
+        .items
+        .iter()
+        .find_map(|(item, qty)| {
+            if *item == Item::PlayingCard && *qty > 0 {
+                Some(*qty)
+            } else {
+                None
+            }
+        })
+        .unwrap_or(0);
+
+    let target_hint = target.unwrap_or("").to_lowercase();
+
+    // If the case is closed, using it mostly acts like flipping it open.
+    if !state.card_case_open && state.card_case_cards_inside > 0 && cards_on_ground == 0 {
+        state.card_case_open = true;
+        return InteractionResult::Success(
+            "You flick open the card case. A full deck rests inside, edges whispering together."
+                .to_string(),
+        );
+    }
+
+    // Open case with cards inside and clear ground -> lay them out
+    if state.card_case_open && state.card_case_cards_inside > 0 && cards_on_ground == 0 {
+        let inside = state.card_case_cards_inside.min(52);
+        state.card_case_cards_inside = state.card_case_cards_inside.saturating_sub(inside);
+        tile.items.add(Item::PlayingCard, inside as u32);
+        return InteractionResult::Success(format!(
+            "You slide {} cards out of the case and spread them across the ground.",
+            inside
+        ));
+    }
+
+    // Open case, cards on ground -> scoop back in up to full deck
+    if state.card_case_open && cards_on_ground > 0 {
+        let capacity_left = 52u8.saturating_sub(state.card_case_cards_inside);
+        if capacity_left == 0 {
+            return InteractionResult::Failure(
+                "The card case is already holding a full deck.".to_string(),
+            );
+        }
+
+        let mut moved: u8 = 0;
+        while moved < capacity_left && tile.items.take(&Item::PlayingCard) {
+            moved = moved.saturating_add(1);
+        }
+
+        if moved == 0 {
+            return InteractionResult::Failure(
+                "You don't see any cards here to scoop into the case.".to_string(),
+            );
+        }
+
+        state.card_case_cards_inside =
+            (state.card_case_cards_inside.saturating_add(moved)).min(52);
+
+        return InteractionResult::Success(format!(
+            "You gather {} cards from the ground back into the case.",
+            moved
+        ));
+    }
+
+    // Closed or empty case with no cards nearby
+    if !state.card_case_open && state.card_case_cards_inside == 0 && cards_on_ground == 0 {
+        return InteractionResult::Failure(
+            "The card case feels light and empty. There are no cards here to work with."
+                .to_string(),
+        );
+    }
+
+    // Fallback: if there are cards on the ground but the case is closed, hint to open it first
+    if !state.card_case_open && cards_on_ground > 0 {
+        let verb = if target_hint.contains("open") {
+            "Use 'open card case' first, then use the case again to scoop cards from the ground."
+        } else {
+            "Open the card case first, then use it again to scoop cards from the ground."
+        };
+        return InteractionResult::Failure(verb.to_string());
+    }
+
+    InteractionResult::Failure(
+        "You turn the card case over in your hands, but nothing interesting happens."
+            .to_string(),
+    )
+}
+
 fn parse_book_id_from_target(target: Option<&str>) -> Option<String> {
     let target = target?.trim();
     if target.is_empty() {
@@ -922,7 +1155,12 @@ fn parse_book_id_from_target(target: Option<&str>) -> Option<String> {
     Some(target.to_string())
 }
 
-fn handle_book_use(state: &mut GameState, item: &Item, target: Option<&str>) -> InteractionResult {
+fn handle_book_use(
+    state: &mut GameState,
+    map: &mut WorldMap,
+    item: &Item,
+    target: Option<&str>,
+) -> InteractionResult {
     let id_from_item = state.book_id_for_item(item).map(|s| s.to_string());
     let mut accessible_ids = state.accessible_book_ids();
     let book_id = if let Some(id) = id_from_item {
@@ -975,6 +1213,7 @@ fn handle_book_use(state: &mut GameState, item: &Item, target: Option<&str>) -> 
     }
     state.set_book_page(&book_id, page);
     state.refresh_blueprint_knowledge(true);
+    state.grant_tutorial_reward_if_needed(map);
 
     let message = if page == 0 {
         format!(
@@ -1058,7 +1297,6 @@ fn handle_foraging(
     tool: Option<&Item>,
     map: &WorldMap,
 ) -> InteractionResult {
-    // Basic foraging with hands or knife
     let mut rng = rand::thread_rng();
     let skill = state.player.skills.get("foraging");
     let pos = state.player.position;
@@ -1075,6 +1313,12 @@ fn handle_foraging(
     let success_chance =
         (0.6 + (skill as f64 * 0.005) + if tool_bonus { 0.1 } else { 0.0 }).min(0.95);
 
+    // Local biome can tilt what we find
+    let biome = pos
+        .as_usize()
+        .and_then(|(r, c)| map.get_tile(r, c).map(|t| t.biome))
+        .unwrap_or(Biome::MixedForest);
+
     // Forage node depletion
     state.foraging_node_for(pos, map, &mut rng);
     let depleted = state
@@ -1090,16 +1334,69 @@ fn handle_foraging(
 
     // Drops
     let drops = if rng.gen_bool(success_chance) {
-        // Success
-        state.player.inventory.add(Item::Stick, 1);
+        // Success: always some basic materials, with better food odds in lush biomes
+
+        // Sticks: base 1, sometimes more as skill improves
+        let mut stick_count = 1;
+        if rng.gen_bool((0.3 + skill as f64 * 0.01).min(0.8)) {
+            stick_count += 1;
+        }
+        state.player.inventory.add(Item::Stick, stick_count);
+
+        // Plant fiber: more common with tools and skill
+        let fiber_chance = (0.35 + skill as f64 * 0.005 + if tool_bonus { 0.15 } else { 0.0 })
+            .min(0.85);
+        let fiber_rolls = if tool_bonus { 2 } else { 1 };
+        for _ in 0..fiber_rolls {
+            if rng.gen_bool(fiber_chance) {
+                state.player.inventory.add(Item::PlantFiber, 1);
+            }
+        }
+
+        // Stone: slightly more likely than before
         if rng.gen_bool(0.3) {
             state.player.inventory.add(Item::PlantFiber, 1);
         }
-        if rng.gen_bool(0.2) {
+        if rng.gen_bool(0.25) {
             state.player.inventory.add(Item::Stone, 1);
         }
-        if rng.gen_bool(0.1) {
-            state.player.inventory.add(Item::WildBerry, 1);
+
+        // Food-focused drops
+        let mut food_found = 0u32;
+
+        // Berries: more generous in forest/oasis-style biomes
+        let berry_base = 0.25;
+        let berry_biome_bonus = match biome {
+            Biome::SpringForest | Biome::MixedForest | Biome::BambooGrove | Biome::Oasis => 0.25,
+            Biome::Lake => 0.15,
+            _ => 0.0,
+        };
+        let berry_chance =
+            (berry_base + berry_biome_bonus + (skill as f64 * 0.005)).min(0.9);
+        let mut berry_count = 0u32;
+        for _ in 0..3 {
+            if rng.gen_bool(berry_chance) {
+                berry_count += 1;
+            }
+        }
+        if berry_count > 0 {
+            state
+                .player
+                .inventory
+                .add(Item::WildBerry, berry_count as u32);
+            food_found += berry_count;
+        }
+
+        // Dates in oasis/desert edge
+        if matches!(biome, Biome::Oasis | Biome::Desert) && rng.gen_bool(0.15) {
+            state.player.inventory.add(Item::Date, 1);
+            food_found += 1;
+        }
+
+        // Occasional edible herbs for tea
+        if rng.gen_bool(0.12) {
+            state.player.inventory.add(Item::WildHerbs, 1);
+            food_found += 1;
         }
 
         state.player.skills.improve("foraging", 1);
@@ -1115,7 +1412,12 @@ fn handle_foraging(
         }
 
         InteractionResult::ActionSuccess {
-            message: "You rummage through the brush and find useful materials.".to_string(),
+            message: if food_found > 0 {
+                "You rummage through the bushes and come away with something to eat and a handful of useful materials."
+                    .to_string()
+            } else {
+                "You rummage through the brush and find useful materials.".to_string()
+            },
             time_cost: 1, // 10 mins
             energy_cost: 5.0,
         }
@@ -1280,7 +1582,7 @@ fn handle_consumption(state: &mut GameState, item: Item) -> InteractionResult {
             "You eat chunks of raw fish. It fills you, though it sits heavy.".to_string()
         }
         Item::CookedFish => {
-            state.player.modify_fullness(25.0);
+            state.player.modify_fullness(30.0);
             state.player.modify_mood(4.0);
             "You eat the warm, cooked fish. Protein and warmth spread through you.".to_string()
         }

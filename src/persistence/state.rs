@@ -65,6 +65,14 @@ pub struct GameState {
     pub books: HashMap<String, BookEntry>,
     #[serde(default = "GameState::default_next_book_id")]
     pub next_book_id: u32,
+    #[serde(default)]
+    pub card_case_cards_inside: u8,
+    #[serde(default)]
+    pub card_case_open: bool,
+    #[serde(default)]
+    pub card_scatter_achievement: bool,
+    #[serde(default)]
+    pub tutorial_reward_claimed: bool,
     // Runtime state (not critical to save but nice to have)
     #[serde(default)]
     pub pending_messages: Vec<String>,
@@ -131,6 +139,11 @@ impl GameState {
         }
         if !cabin.items.contains(&Item::WildHerbs) {
             cabin.items.push(Item::WildHerbs);
+        }
+        if !cabin.items.contains(&Item::CardCase)
+            && !cabin.table_items.contains(&Item::CardCase)
+        {
+            cabin.table_items.push(Item::CardCase);
         }
     }
 
@@ -282,8 +295,19 @@ impl GameState {
             TUTORIAL_BOOK_ID,
             "Cabin Tutorial",
             vec![
-                "Welcome. Use 'use hands on bush' to forage, 'create campfire' to plan a fire, and 'use log on blueprint' to build.",
-                "Write a title on a blank book: write 제목:My Journal on 빈 책. Then write pages: write 페이지1:Hello on book-{id}.",
+                "Welcome to the cabin. Start simple: use hands on bush to forage for sticks, fibers, berries and herbs. Small piles add up.",
+                "To light a fire, you usually need three things: chopped firewood, kindling or tinder, and a way to spark.",
+                "The wood shed holds logs and an axe. Inside the shed, use axe on block to split logs into firewood. Logs don't last forever.",
+                "You'll also need more logs in the long run. Outside, move next to a tree and use axe on tree. Heavy swings cost energy.",
+                "Once you have fuel, go to the cabin hearth and use kindling on fire to lay a base. Then use matchbox on fire when you're ready.",
+                "If the fire dies, you can add fuel later: use firewood on fire or toss in dry sticks, bark, or very old books you don't mind losing.",
+                "For hunger, you can fish, forage, or shake fruit. Near the lake, even bare hands can sometimes pull a fish from the shallows.",
+                "Try use hands on water or near the shore and pay attention to ripples and timing. A steady rhythm often helps.",
+                "If you catch a fish, go back to the cabin. Stand by the hearth with a lit fire and use fish on fire to grill a simple meal.",
+                "Some trees bear fruit. If you find an apple tree or other fruit tree, sometimes a good kick is enough to drop a snack.",
+                "In gentle time, fruit slowly returns. Don't strip every tree bare at once; patience feeds you twice.",
+                "Books, maps and strange objects in the cabin hint at deeper systems. Not all of them explain themselves immediately.",
+                "If you feel lost, look around, meditate by the lake, or talk to the rubber duck. Sometimes the quiet answers first.",
             ],
             false,
         );
@@ -445,6 +469,59 @@ impl GameState {
             }
         }
         ids
+    }
+
+    pub fn grant_tutorial_reward_if_needed(&mut self, map: &mut WorldMap) {
+        if self.tutorial_reward_claimed {
+            return;
+        }
+        if !self.book_completed(TUTORIAL_BOOK_ID) {
+            return;
+        }
+
+        let mut dropped = false;
+
+        match self.player.room {
+            Some(Room::CabinMain) => {
+                if let Some(cabin) = self.cabin_state_mut() {
+                    cabin.add_item(Item::Knife);
+                    cabin.add_item(Item::Kindling);
+                    cabin.add_item(Item::Kindling);
+                    cabin.add_item(Item::Kindling);
+                    cabin.add_item(Item::Kindling);
+                    cabin.add_item(Item::Kindling);
+                    cabin.add_item(Item::Apple);
+                    cabin.add_item(Item::Apple);
+                    cabin.add_item(Item::Apple);
+                    cabin.add_item(Item::Apple);
+                    cabin.add_item(Item::Apple);
+                    cabin.add_item(Item::Apple);
+                    cabin.add_item(Item::Apple);
+                    cabin.add_item(Item::Apple);
+                    cabin.add_item(Item::Apple);
+                    cabin.add_item(Item::Apple);
+                    dropped = true;
+                }
+            }
+            _ => {
+                if let Some((r, c)) = self.player.position.as_usize() {
+                    if let Some(tile) = map.get_tile_mut(r, c) {
+                        tile.items.add(Item::Knife, 1);
+                        tile.items.add(Item::Kindling, 5);
+                        tile.items.add(Item::Apple, 10);
+                        dropped = true;
+                    }
+                }
+            }
+        }
+
+        if dropped {
+            self.tutorial_reward_claimed = true;
+            self.pending_messages.push(
+                "As you finish the cabin tutorial, a small bundle of supplies appears at your feet: 10 apples, 5 pieces of kindling, and a simple knife."
+                    .to_string(),
+            );
+        }
     }
 
     pub fn player_or_cabin_has_book(&self, id: &str) -> bool {
@@ -611,6 +688,14 @@ impl GameState {
             }
         }
 
+        // Ensure an east-side cave entrance exists in the winter forest
+        if self.objects.find("east_cave_entrance").is_none() {
+            let cave_pos = Position::new(0, 8);
+            let cave = WorldObject::new(ObjectKind::GenericStructure("cave entrance".to_string()));
+            self.objects
+                .add("east_cave_entrance", cave_pos, cave);
+        }
+
         self.ensure_table_object(table_items);
         self.ensure_duck_present();
     }
@@ -656,6 +741,55 @@ impl GameState {
             .unwrap_or_default()
     }
 
+    fn has_any_playing_cards(&self, map: &WorldMap) -> bool {
+        if self.player.inventory.has(&Item::PlayingCard, 1) {
+            return true;
+        }
+
+        if self
+            .cabin_state()
+            .map(|c| {
+                c.items.contains(&Item::PlayingCard)
+                    || c.table_items.contains(&Item::PlayingCard)
+            })
+            .unwrap_or(false)
+        {
+            return true;
+        }
+
+        if self
+            .table_surface()
+            .map(|s| s.items.contains(&Item::PlayingCard))
+            .unwrap_or(false)
+        {
+            return true;
+        }
+
+        for r in 0..MAP_HEIGHT {
+            for c in 0..MAP_WIDTH {
+                if let Some(tile) = map.get_tile(r, c) {
+                    if tile
+                        .items
+                        .items
+                        .iter()
+                        .any(|(item, qty)| *item == Item::PlayingCard && *qty > 0)
+                    {
+                        return true;
+                    }
+                }
+            }
+        }
+
+        false
+    }
+
+    fn ensure_card_case_state(&mut self, map: &WorldMap) {
+        if self.card_case_cards_inside == 0 && !self.has_any_playing_cards(map) {
+            self.card_case_cards_inside = 52;
+            self.card_case_open = false;
+        }
+    }
+
     /// Create a new game state with initial values
     pub fn new(map: &WorldMap) -> Self {
         let mut rng = rand::thread_rng();
@@ -674,6 +808,10 @@ impl GameState {
             legacy_cabin: None,
             legacy_wood_shed: None,
             legacy_trees: None,
+            card_case_cards_inside: 52,
+            card_case_open: false,
+            card_scatter_achievement: false,
+            tutorial_reward_claimed: false,
         };
         state.ensure_book_registry();
         state.bootstrap_structures();
@@ -681,7 +819,9 @@ impl GameState {
         state.ensure_player_visit();
         state.refresh_blueprint_knowledge(false);
         state.seed_bamboo_grove();
+        state.ensure_card_case_state(map);
         state.seed_tree_population(map, &mut rng, 10);
+        state.ensure_tree_density(map, &mut rng);
         state
     }
 
@@ -728,8 +868,11 @@ impl GameState {
                     state.refresh_blueprint_knowledge(false);
                     state.seed_bamboo_grove();
 
+                    state.ensure_card_case_state(map);
+
                     let mut rng = rand::thread_rng();
                     state.seed_tree_population(map, &mut rng, 10);
+                    state.ensure_tree_density(map, &mut rng);
                     state
                 }
                 Err(e) => {
@@ -887,7 +1030,9 @@ impl GameState {
             let Some(tile) = map.get_tile(gr, gc) else {
                 continue;
             };
-            if matches!(tile.tile_type, TileType::Forest(_)) && tile.walkable {
+            if matches!(tile.tile_type, TileType::Forest(biome) if !matches!(biome, Biome::Desert))
+                && tile.walkable
+            {
                 return Some(pos);
             }
         }
@@ -930,6 +1075,82 @@ impl GameState {
             if !self.spawn_tree(map, rng) {
                 break;
             }
+        }
+    }
+
+    fn ensure_tree_density(&mut self, map: &WorldMap, rng: &mut impl Rng) {
+        let mut world_row = -MAP_EXTENT;
+        while world_row <= MAP_EXTENT {
+            let mut world_col = -MAP_EXTENT;
+            while world_col <= MAP_EXTENT {
+                let mut eligible_positions: Vec<Position> = Vec::new();
+
+                let block_row_max = (world_row + 2).min(MAP_EXTENT);
+                let block_col_max = (world_col + 2).min(MAP_EXTENT);
+
+                let mut r = world_row;
+                while r <= block_row_max {
+                    let mut c = world_col;
+                    while c <= block_col_max {
+                        let pos = Position::new(r, c);
+                        if let Some((gr, gc)) = pos.as_usize() {
+                            if let Some(tile) = map.get_tile(gr, gc) {
+                                if matches!(
+                                    tile.tile_type,
+                                    TileType::Forest(biome) if !matches!(biome, Biome::Desert)
+                                ) && tile.walkable
+                                {
+                                    eligible_positions.push(pos);
+                                }
+                            }
+                        }
+                        c += 1;
+                    }
+                    r += 1;
+                }
+
+                if !eligible_positions.is_empty() {
+                    let mut has_tree = false;
+                    for pos in &eligible_positions {
+                        if self
+                            .objects
+                            .objects_at(pos)
+                            .iter()
+                            .any(|p| matches!(p.object.kind, ObjectKind::Tree(ref tree) if !tree.felled))
+                        {
+                            has_tree = true;
+                            break;
+                        }
+                    }
+
+                    if !has_tree {
+                        let idx = rng.gen_range(0..eligible_positions.len());
+                        let pos = eligible_positions[idx];
+
+                        let kind = pos
+                            .as_usize()
+                            .and_then(|(gr, gc)| map.get_tile(gr, gc))
+                            .map(|t| {
+                                if matches!(t.biome, Biome::BambooGrove) {
+                                    TreeType::Bamboo
+                                } else {
+                                    self.random_tree_kind(rng)
+                                }
+                            })
+                            .unwrap_or_else(|| self.random_tree_kind(rng));
+
+                        let mut tree = Tree::with_random_fruit(pos, kind, rng);
+                        tree.apply_kind_defaults();
+                        let id =
+                            format!("tree-{}-{}-{}", pos.row, pos.col, self.objects.placed.len());
+                        self.objects
+                            .add(id, pos, WorldObject::new(ObjectKind::Tree(tree)));
+                    }
+                }
+
+                world_col += 3;
+            }
+            world_row += 3;
         }
     }
 
