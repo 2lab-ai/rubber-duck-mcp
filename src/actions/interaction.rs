@@ -519,7 +519,7 @@ pub fn try_use(
     item_name: &str,
     target_name: Option<&str>,
     state: &mut GameState,
-    _map: &WorldMap,
+    map: &WorldMap,
 ) -> InteractionResult {
     let item_query = item_name.trim();
     let item_query_lower = item_query.to_lowercase();
@@ -534,7 +534,7 @@ pub fn try_use(
     if using_hands {
         if let Some(target) = target_str {
             if target.contains("bush") || target.contains("shrub") || target.contains("ground") {
-                return handle_foraging(state, None);
+                return handle_foraging(state, None, map);
             }
         }
         return InteractionResult::Failure(
@@ -605,21 +605,21 @@ pub fn try_use(
     if let Some(target) = target_str {
         if target.contains("bamboo") {
             if item == Item::Axe || item == Item::StoneAxe {
-                return try_chop_tree(state, _map);
+                return try_chop_tree(state, map, &item);
             }
         }
         if target.contains("tree") || target.contains("wood") || target.contains("log") {
             if item == Item::Axe || item == Item::StoneAxe {
                 // Check if it's chopping block or standing tree
                 if target.contains("block") || target.contains("chop") {
-                    return try_chop_firewood(state);
+                    return try_chop_firewood(state, &item);
                 } else {
-                    return try_chop_tree(state, _map);
+                    return try_chop_tree(state, map, &item);
                 }
             }
         }
         if target.contains("bush") || target.contains("shrub") || target.contains("ground") {
-            return handle_foraging(state, Some(&item));
+            return handle_foraging(state, Some(&item), map);
         }
     }
 
@@ -631,6 +631,7 @@ pub fn try_use(
                     state.player.inventory.remove(&Item::Log, 1);
                     state.player.inventory.add(Item::Kindling, 4);
                     state.player.skills.improve("woodcutting", 2);
+                    state.damage_tool(&item, 1, "whittling wood");
                     return InteractionResult::ActionSuccess {
                         message: "You whittle the log down into a pile of fine kindling."
                             .to_string(),
@@ -644,6 +645,7 @@ pub fn try_use(
                     state.player.inventory.remove(&Item::Stick, 1);
                     state.player.inventory.add(Item::Kindling, 1);
                     state.player.skills.improve("woodcutting", 1);
+                    state.damage_tool(&item, 1, "carving a stick");
                     return InteractionResult::ActionSuccess {
                         message: "You shave the stick into tinder.".to_string(),
                         time_cost: 1,
@@ -656,6 +658,7 @@ pub fn try_use(
                     state.player.inventory.remove(&Item::Bamboo, 1);
                     state.player.inventory.add(Item::Paper, 3);
                     state.player.skills.improve("tailoring", 2);
+                    state.damage_tool(&item, 1, "splitting bamboo");
                     return InteractionResult::ActionSuccess {
                         message: "You split the bamboo and press it into thin sheets of paper."
                             .to_string(),
@@ -885,10 +888,15 @@ fn handle_blueprint_interaction(state: &mut GameState, item: &Item) -> Interacti
     InteractionResult::Failure("Something went wrong with the blueprint.".to_string())
 }
 
-fn handle_foraging(state: &mut GameState, tool: Option<&Item>) -> InteractionResult {
+fn handle_foraging(
+    state: &mut GameState,
+    tool: Option<&Item>,
+    map: &WorldMap,
+) -> InteractionResult {
     // Basic foraging with hands or knife
     let mut rng = rand::thread_rng();
     let skill = state.player.skills.get("foraging");
+    let pos = state.player.position;
 
     // Check energy
     if state.player.energy < 5.0 {
@@ -901,6 +909,19 @@ fn handle_foraging(state: &mut GameState, tool: Option<&Item>) -> InteractionRes
     );
     let success_chance =
         (0.6 + (skill as f64 * 0.005) + if tool_bonus { 0.1 } else { 0.0 }).min(0.95);
+
+    // Forage node depletion
+    state.foraging_node_for(pos, map, &mut rng);
+    let depleted = state
+        .forage_nodes
+        .get(&pos)
+        .map(|n| n.charges == 0)
+        .unwrap_or(false);
+    if depleted {
+        return InteractionResult::Failure(
+            "The brush here is picked clean. Give it some time to recover.".to_string(),
+        );
+    }
 
     // Drops
     let drops = if rng.gen_bool(success_chance) {
@@ -917,6 +938,16 @@ fn handle_foraging(state: &mut GameState, tool: Option<&Item>) -> InteractionRes
         }
 
         state.player.skills.improve("foraging", 1);
+        if let Some(node) = state.forage_nodes.get_mut(&pos) {
+            node.charges = node.charges.saturating_sub(1);
+            if node.charges == 0 {
+                node.cooldown = 12;
+            }
+        }
+
+        if let Some(t) = tool {
+            state.damage_tool(t, 1, "foraging");
+        }
 
         InteractionResult::ActionSuccess {
             message: "You rummage through the brush and find useful materials.".to_string(),
@@ -933,7 +964,7 @@ fn handle_foraging(state: &mut GameState, tool: Option<&Item>) -> InteractionRes
     drops
 }
 
-fn try_chop_firewood(state: &mut GameState) -> InteractionResult {
+fn try_chop_firewood(state: &mut GameState, tool: &Item) -> InteractionResult {
     if !matches!(state.player.room, Some(Room::WoodShed)) {
         return InteractionResult::Failure("Go to the wood shed to chop firewood.".to_string());
     }
@@ -943,11 +974,13 @@ fn try_chop_firewood(state: &mut GameState) -> InteractionResult {
             wood_shed.logs -= 1;
             state.player.inventory.add(Item::Firewood, 3);
             state.player.skills.improve("woodcutting", 2);
-            InteractionResult::ActionSuccess {
+            let result = InteractionResult::ActionSuccess {
                 message: "You chop a log into firewood.".to_string(),
                 time_cost: 2,
                 energy_cost: 10.0,
-            }
+            };
+            state.damage_tool(tool, 2, "splitting firewood");
+            result
         } else {
             InteractionResult::Failure("No logs in the shed.".to_string())
         }
@@ -957,7 +990,7 @@ fn try_chop_firewood(state: &mut GameState) -> InteractionResult {
 }
 
 // Re-implement tree chopping with ActionSuccess
-fn try_chop_tree(state: &mut GameState, _map: &WorldMap) -> InteractionResult {
+fn try_chop_tree(state: &mut GameState, _map: &WorldMap, tool: &Item) -> InteractionResult {
     let player_pos = state.player.position;
     let Some(tree) = state.objects.find_tree_mut_at(&player_pos) else {
         return InteractionResult::Failure(
@@ -972,11 +1005,13 @@ fn try_chop_tree(state: &mut GameState, _map: &WorldMap) -> InteractionResult {
         tree.felled = true;
         state.player.inventory.add(Item::Bamboo, 2);
         state.player.skills.improve("woodcutting", 3);
-        return InteractionResult::ActionSuccess {
+        let result = InteractionResult::ActionSuccess {
             message: "You slice through the bamboo. The stalks fall neatly.".to_string(),
             time_cost: 2,
             energy_cost: 10.0,
         };
+        state.damage_tool(tool, 1, "cutting bamboo");
+        return result;
     }
 
     tree.felled = true;
@@ -985,11 +1020,13 @@ fn try_chop_tree(state: &mut GameState, _map: &WorldMap) -> InteractionResult {
     state.player.inventory.add(Item::Bark, 1);
     state.player.skills.improve("woodcutting", 5);
 
-    InteractionResult::ActionSuccess {
+    let result = InteractionResult::ActionSuccess {
         message: "You fell a tree! Timber!".to_string(),
         time_cost: 6, // 1 hour
         energy_cost: 20.0,
-    }
+    };
+    state.damage_tool(tool, 3, "chopping a tree");
+    result
 }
 
 fn handle_add_fuel(state: &mut GameState, item: Item) -> InteractionResult {

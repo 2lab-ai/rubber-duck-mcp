@@ -1,0 +1,26 @@
+{
+  "task_id": 10,
+  "scope": "Realism: Durability & Resource depletion",
+  "goal": "Add simple durability to tools and make gathering nodes deplete and respawn so resource usage feels grounded.",
+  "decisions": [
+    "Track durability per tool type (Axe/StoneAxe/Knife/StoneKnife) on the player; decrement on use and break/remove when it hits zero.",
+    "Model foraging depletion per tile via a small charge/cooldown pool seeded by biome; trees already use hits, so keep that flow intact.",
+    "Keep recipes and inventory unchanged; share durability across copies of the same tool for simplicity."
+  ],
+  "plan": [
+    "Add persistence fields for tool durability and per-tile foraging nodes with defaults; seed nodes lazily based on biome.",
+    "Apply durability loss on use interactions (forage, chop, knife processing, firewood) and break tools with feedback when exhausted.",
+    "Gate foraging by local charges; drain on success, set a cooldown, and respawn after a short delay; add player-facing messages.",
+    "Run cargo check and update todo tracking."
+  ],
+  "notes": [
+    "No per-item unique durability; durability is tracked per tool type.",
+    "Tree chopping already depletes trees; focus depletion on foraging nodes."
+  ],
+  "status": "completed",
+  "progress": [
+    "Player state now stores tool_durability for axe/stone axe/knife/stone knife; use flows drain durability and break/remove the tool with a pending message at zero.",
+    "Foraging nodes are tracked per tile with biome-seeded charges and cooldown-based respawn; depleted tiles block foraging until they recover.",
+    "Gather/processing flows apply durability and depletion, with cargo check passing after the changes."
+  ]
+}

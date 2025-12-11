@@ -11,6 +11,41 @@ const TUTORIAL_BOOK_ID: &str = "book-tutorial";
 const OLD_BOOK_ID: &str = "book-old";
 const DEATH_NOTE_ID: &str = "book-death-note";
 
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ForageNode {
+    pub charges: u8,
+    pub cooldown: u8,
+}
+
+impl ForageNode {
+    pub fn new(biome: Biome, rng: &mut impl Rng) -> Self {
+        let charges = match biome {
+            Biome::Desert => rng.gen_range(1..=2),
+            Biome::Oasis => rng.gen_range(3..=4),
+            Biome::WinterForest => rng.gen_range(2..=3),
+            Biome::Lake => rng.gen_range(3..=5),
+            Biome::BambooGrove => rng.gen_range(3..=5),
+            _ => rng.gen_range(4..=6),
+        };
+        Self {
+            charges,
+            cooldown: 0,
+        }
+    }
+
+    pub fn tick(&mut self, biome: Biome, rng: &mut impl Rng) {
+        if self.charges > 0 {
+            return;
+        }
+        if self.cooldown > 0 {
+            self.cooldown -= 1;
+            if self.cooldown == 0 {
+                *self = Self::new(biome, rng);
+            }
+        }
+    }
+}
+
 /// The complete game state that gets saved/loaded
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct GameState {
@@ -23,6 +58,8 @@ pub struct GameState {
     pub objects: ObjectRegistry,
     #[serde(default)]
     pub custom_names: HashMap<Item, String>,
+    #[serde(default)]
+    pub forage_nodes: HashMap<Position, ForageNode>,
     #[serde(default = "GameState::default_books")]
     pub books: HashMap<String, BookEntry>,
     #[serde(default = "GameState::default_next_book_id")]
@@ -152,6 +189,21 @@ impl GameState {
 
     fn ensure_player_visit(&mut self) {
         self.player.mark_visited();
+    }
+
+    pub fn damage_tool(&mut self, item: &Item, amount: u32, context: &str) {
+        let Some(max) = Player::tool_max_durability(item) else {
+            return;
+        };
+        let entry = self.player.tool_durability.entry(*item).or_insert(max);
+        if *entry <= amount {
+            let _ = self.player.inventory.remove(item, 1);
+            self.player.tool_durability.remove(item);
+            self.pending_messages
+                .push(format!("Your {} breaks while {}.", item.name(), context));
+        } else {
+            *entry -= amount;
+        }
     }
 
     pub fn refresh_blueprint_knowledge(&mut self, push_messages: bool) {
@@ -441,6 +493,21 @@ impl GameState {
         hints
     }
 
+    pub fn foraging_node_for(
+        &mut self,
+        pos: Position,
+        map: &WorldMap,
+        rng: &mut impl Rng,
+    ) -> &mut ForageNode {
+        let biome = pos
+            .as_usize()
+            .and_then(|(r, c)| map.get_tile(r, c).map(|t| t.biome))
+            .unwrap_or(Biome::MixedForest);
+        self.forage_nodes
+            .entry(pos)
+            .or_insert_with(|| ForageNode::new(biome, rng))
+    }
+
     pub fn on_player_pickup(&mut self, item: &Item) {
         if matches!(
             item,
@@ -570,6 +637,7 @@ impl GameState {
             wildlife: spawn_wildlife(),
             objects: ObjectRegistry::new(),
             custom_names: HashMap::new(),
+            forage_nodes: HashMap::new(),
             books: GameState::default_books(),
             next_book_id: GameState::default_next_book_id(),
             pending_messages: Vec::new(),
@@ -613,6 +681,9 @@ impl GameState {
                     }
                     if state.custom_names.is_empty() {
                         state.custom_names = HashMap::new();
+                    }
+                    if state.forage_nodes.is_empty() {
+                        state.forage_nodes = HashMap::new();
                     }
 
                     if state.books.is_empty() {
@@ -667,6 +738,7 @@ impl GameState {
 
         let mut rng = rand::thread_rng();
         self.update_trees(map, &mut rng);
+        self.update_forage_nodes(map, &mut rng);
 
         // Hunger / thirst decay
         self.player.modify_fullness(-0.5);
@@ -693,6 +765,19 @@ impl GameState {
 
         // Check for newly unlocked blueprints as skills/books progress
         self.refresh_blueprint_knowledge(true);
+    }
+
+    fn update_forage_nodes(&mut self, map: &WorldMap, rng: &mut impl Rng) {
+        let positions: Vec<Position> = self.forage_nodes.keys().copied().collect();
+        for pos in positions {
+            if let Some(node) = self.forage_nodes.get_mut(&pos) {
+                let biome = pos
+                    .as_usize()
+                    .and_then(|(r, c)| map.get_tile(r, c).map(|t| t.biome))
+                    .unwrap_or(Biome::MixedForest);
+                node.tick(biome, rng);
+            }
+        }
     }
 
     fn update_player_comfort(&mut self, map: &WorldMap) {

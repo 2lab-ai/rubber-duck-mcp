@@ -261,6 +261,8 @@ pub struct Player {
     pub visited: HashSet<Position>,
     #[serde(default = "Player::default_known_blueprints")]
     pub known_blueprints: HashSet<Item>,
+    #[serde(default = "Player::default_tool_durability")]
+    pub tool_durability: HashMap<Item, u32>,
 
     // Stats
     pub health: f32, // 0-100
@@ -297,6 +299,7 @@ impl Player {
             room: None,
             visited,
             known_blueprints: HashSet::new(),
+            tool_durability: HashMap::new(),
 
             health: 100.0,
             warmth: 50.0,
@@ -319,6 +322,10 @@ impl Player {
 
     pub fn default_known_blueprints() -> HashSet<Item> {
         HashSet::new()
+    }
+
+    pub fn default_tool_durability() -> HashMap<Item, u32> {
+        HashMap::new()
     }
 
     pub fn is_indoor(&self) -> bool {
@@ -344,6 +351,16 @@ impl Player {
 
     pub fn mark_visited(&mut self) {
         self.visited.insert(self.position);
+    }
+
+    pub fn tool_max_durability(item: &Item) -> Option<u32> {
+        match item {
+            Item::Axe => Some(60),
+            Item::StoneAxe => Some(40),
+            Item::Knife => Some(70),
+            Item::StoneKnife => Some(40),
+            _ => None,
+        }
     }
 
     pub fn modify_health(&mut self, delta: f32) {
