@@ -17,4 +17,7 @@ Thumbs.db
 npm/node_modules/
 npm/bin/native/
 npm/package-lock.json
+
 data/**
+.claude/**
+.gemini/**
