@@ -1,6 +1,6 @@
 use serde::{Deserialize, Serialize};
 
-use crate::entity::{Cabin, Item, Species, Tree, TreeType, WoodShed};
+use crate::entity::{Body, Cabin, Item, Species, Tree, TreeType, WoodShed};
 use crate::world::Position;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
@@ -54,6 +54,8 @@ impl ObjectSurface {
 pub struct Corpse {
     pub species: Species,
     pub freshness: u32,
+    #[serde(default)]
+    pub body: Option<Body>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]

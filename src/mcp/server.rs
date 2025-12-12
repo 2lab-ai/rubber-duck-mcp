@@ -875,7 +875,16 @@ You feel calmer and a bit more refreshed. It is now {}.",
 
         let item = match Item::from_str(&item_str) {
             Some(i) => i,
-            None => return CallToolResult::error(format!("Unknown item '{}'.", item_str)),
+            None => {
+                match self
+                    .world
+                    .state
+                    .name_companion(&item_str, &new_name)
+                {
+                    Ok(msg) => return CallToolResult::text(msg),
+                    Err(err) => return CallToolResult::error(err),
+                }
+            }
         };
 
         if !self.world.state.player_can_access_item(&item) {

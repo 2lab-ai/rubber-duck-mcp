@@ -470,6 +470,8 @@ pub struct Wildlife {
     pub alive: bool,
     #[serde(default)]
     pub tamed: bool,
+    #[serde(default)]
+    pub name: Option<String>,
 }
 
 impl Wildlife {
@@ -482,6 +484,7 @@ impl Wildlife {
             body: Body::for_species(species),
             alive: true,
             tamed: false,
+            name: None,
         }
     }
 
@@ -551,6 +554,16 @@ impl Wildlife {
 
     pub fn describe(&self) -> String {
         self.species.describe_action(self.behavior)
+    }
+
+    /// Display name for this animal, including a custom name if tamed.
+    pub fn display_name(&self) -> String {
+        match &self.name {
+            Some(custom) if !custom.trim().is_empty() => {
+                format!("{} '{}'", self.species.name(), custom.trim())
+            }
+            _ => self.species.name().to_string(),
+        }
     }
 }
 

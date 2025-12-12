@@ -1,4 +1,4 @@
-use crate::entity::{Blueprint, BookEntry, FireState, Item, Room, Species};
+use crate::entity::{Blueprint, BookEntry, Body, BodyPartKind, FireState, Item, Room, Species};
 use crate::persistence::GameState;
 use crate::world::{Biome, Position, TimeOfDay, Weather, WorldMap};
 use rand::Rng;
@@ -531,6 +531,7 @@ pub fn try_drop(item_name: &str, state: &mut GameState, map: &mut WorldMap) -> I
 pub fn examine(target: &str, state: &GameState) -> String {
     let normalized = target.to_lowercase();
     let player = &state.player;
+    let player_pos = player.position;
 
     // Check for active project
     if normalized.contains("blueprint") || normalized.contains("project") {
@@ -593,7 +594,209 @@ pub fn examine(target: &str, state: &GameState) -> String {
         }
         _ => {}
     }
-    // ... (self examine)
+
+    // Examine nearby wildlife (living animals)
+    {
+        let mut same_tile_indices: Vec<usize> = Vec::new();
+        let mut best_idx: Option<usize> = None;
+        let mut best_dist = f32::MAX;
+        for (idx, w) in state.wildlife.iter().enumerate() {
+            let species_name = w.species.name().to_lowercase();
+            if !species_name.contains(&normalized)
+                && !normalized.contains(&species_name)
+                && !normalized.contains("animal")
+            {
+                continue;
+            }
+            if w.position == player_pos {
+                same_tile_indices.push(idx);
+            }
+            let dist = player_pos.distance_to(&w.position);
+            if dist <= 6.0 && dist < best_dist {
+                best_dist = dist;
+                best_idx = Some(idx);
+            }
+        }
+
+        if !same_tile_indices.is_empty() {
+            let mut lines = Vec::new();
+            if same_tile_indices.len() == 1 {
+                let w = &state.wildlife[same_tile_indices[0]];
+                let body = &w.body;
+                let overall = (body.overall_health_ratio() * 100.0).round();
+                lines.push(format!(
+                    "You study {} from very close.",
+                    w.display_name()
+                ));
+                lines.push(format!("Overall condition: {:.0}%.", overall));
+
+                for part in &body.parts {
+                    let name = match part.kind {
+                        BodyPartKind::Head => "head",
+                        BodyPartKind::Torso => "torso",
+                        BodyPartKind::ArmLeft => "left arm",
+                        BodyPartKind::ArmRight => "right arm",
+                        BodyPartKind::LegLeft => "left leg",
+                        BodyPartKind::LegRight => "right leg",
+                        BodyPartKind::FrontLeftLeg => "front left leg",
+                        BodyPartKind::FrontRightLeg => "front right leg",
+                        BodyPartKind::BackLeftLeg => "back left leg",
+                        BodyPartKind::BackRightLeg => "back right leg",
+                        BodyPartKind::Tail => "tail",
+                    };
+                    let ratio = (part.ratio() * 100.0).round();
+                    let tag = if part.vital {
+                        " (vital)"
+                    } else if part.movement {
+                        " (movement)"
+                    } else if part.manipulation {
+                        " (grip)"
+                    } else {
+                        ""
+                    };
+                    lines.push(format!("- {}: {:.0}%{}", name, ratio, tag));
+                }
+
+                return lines.join("\n");
+            } else {
+                lines.push(
+                    "You study the animals sharing this patch of ground.".to_string(),
+                );
+                for idx in same_tile_indices {
+                    let w = &state.wildlife[idx];
+                    let body = &w.body;
+                    let overall = (body.overall_health_ratio() * 100.0).round();
+                    lines.push(String::new());
+                    lines.push(format!("{}:", w.display_name()));
+                    lines.push(format!("  Overall condition: {:.0}%.", overall));
+
+                    for part in &body.parts {
+                        let name = match part.kind {
+                            BodyPartKind::Head => "head",
+                            BodyPartKind::Torso => "torso",
+                            BodyPartKind::ArmLeft => "left arm",
+                            BodyPartKind::ArmRight => "right arm",
+                            BodyPartKind::LegLeft => "left leg",
+                            BodyPartKind::LegRight => "right leg",
+                            BodyPartKind::FrontLeftLeg => "front left leg",
+                            BodyPartKind::FrontRightLeg => "front right leg",
+                            BodyPartKind::BackLeftLeg => "back left leg",
+                            BodyPartKind::BackRightLeg => "back right leg",
+                            BodyPartKind::Tail => "tail",
+                        };
+                        let ratio = (part.ratio() * 100.0).round();
+                        let tag = if part.vital {
+                            " (vital)"
+                        } else if part.movement {
+                            " (movement)"
+                        } else if part.manipulation {
+                            " (grip)"
+                        } else {
+                            ""
+                        };
+                        lines.push(format!("- {}: {:.0}%{}", name, ratio, tag));
+                    }
+                }
+
+                return lines.join("\n");
+            }
+        }
+
+        if let Some(idx) = best_idx {
+            let w = &state.wildlife[idx];
+            let mut lines = Vec::new();
+            let body = &w.body;
+            let overall = (body.overall_health_ratio() * 100.0).round();
+            lines.push(format!(
+                "You study {} from nearby.",
+                w.display_name()
+            ));
+            lines.push(format!("Overall condition: {:.0}%.", overall));
+
+            for part in &body.parts {
+                let name = match part.kind {
+                    BodyPartKind::Head => "head",
+                    BodyPartKind::Torso => "torso",
+                    BodyPartKind::ArmLeft => "left arm",
+                    BodyPartKind::ArmRight => "right arm",
+                    BodyPartKind::LegLeft => "left leg",
+                    BodyPartKind::LegRight => "right leg",
+                    BodyPartKind::FrontLeftLeg => "front left leg",
+                    BodyPartKind::FrontRightLeg => "front right leg",
+                    BodyPartKind::BackLeftLeg => "back left leg",
+                    BodyPartKind::BackRightLeg => "back right leg",
+                    BodyPartKind::Tail => "tail",
+                };
+                let ratio = (part.ratio() * 100.0).round();
+                let tag = if part.vital {
+                    " (vital)"
+                } else if part.movement {
+                    " (movement)"
+                } else if part.manipulation {
+                    " (grip)"
+                } else {
+                    ""
+                };
+                lines.push(format!("- {}: {:.0}%{}", name, ratio, tag));
+            }
+
+            return lines.join("\n");
+        }
+    }
+
+    // Examine corpse at feet (with stored body, if any)
+    {
+        for po in state.objects.objects_at(&player_pos) {
+            if let crate::world::ObjectKind::Corpse(ref corpse) = po.object.kind {
+                let mut lines = Vec::new();
+                lines.push(format!(
+                    "You examine the {} carcass in detail.",
+                    corpse.species.name()
+                ));
+                lines.push(format!("Freshness: {} (higher means older).", corpse.freshness));
+
+                if let Some(ref body) = corpse.body {
+                    let overall = (body.overall_health_ratio() * 100.0).round();
+                    lines.push(format!(
+                        "Overall condition at death: {:.0}% of original.",
+                        overall
+                    ));
+                    for part in &body.parts {
+                        let name = match part.kind {
+                            BodyPartKind::Head => "head",
+                            BodyPartKind::Torso => "torso",
+                            BodyPartKind::ArmLeft => "left arm",
+                            BodyPartKind::ArmRight => "right arm",
+                            BodyPartKind::LegLeft => "left leg",
+                            BodyPartKind::LegRight => "right leg",
+                            BodyPartKind::FrontLeftLeg => "front left leg",
+                            BodyPartKind::FrontRightLeg => "front right leg",
+                            BodyPartKind::BackLeftLeg => "back left leg",
+                            BodyPartKind::BackRightLeg => "back right leg",
+                            BodyPartKind::Tail => "tail",
+                        };
+                        let ratio = (part.ratio() * 100.0).round();
+                        let tag = if part.vital {
+                            " (vital)"
+                        } else if part.movement {
+                            " (movement)"
+                        } else if part.manipulation {
+                            " (grip)"
+                        } else {
+                            ""
+                        };
+                        lines.push(format!("- {}: {:.0}%{}", name, ratio, tag));
+                    }
+                } else {
+                    lines.push("You see no obvious sign of what killed it; only stillness.".to_string());
+                }
+
+                return lines.join("\n");
+            }
+        }
+    }
+
+    // Self examine
     if normalized.contains("self") || normalized == "me" {
         return state.player.status_summary();
     }
@@ -659,13 +862,14 @@ pub fn talk_to_animal_companion(
     let idx = nearest_index?;
     let companion = &state.wildlife[idx];
     let species_name = companion.species.name();
+    let display_name = companion.display_name();
 
     let mut rng = rand::thread_rng();
     let opener = match message {
         Some(msg) if !msg.trim().is_empty() => {
-            format!("You, to your {}: \"{}\"\n", species_name, msg.trim())
+            format!("You, to your {}: \"{}\"\n", display_name, msg.trim())
         }
-        _ => format!("You speak quietly to your {}.\n", species_name),
+        _ => format!("You speak quietly to your {}.\n", display_name),
     };
 
     let reply_pool = match companion.species {
@@ -1049,7 +1253,7 @@ pub fn try_use(
         }
     }
 
-    // 3c. Feeding animal companions (dogs and cats)
+    // 3c. Feeding wildlife (dogs, cats, and others)
     if matches!(
         item,
         Item::RawMeat
@@ -1061,49 +1265,90 @@ pub fn try_use(
     ) {
         if let Some(target) = target_str {
             let t = target.to_lowercase();
-            if t.contains("dog") || t.contains("cat") {
-                let pos = state.player.position;
-                let mut best_index: Option<usize> = None;
-                let mut best_distance = f32::MAX;
+            let pos = state.player.position;
+            let mut same_tile_index: Option<usize> = None;
+            let mut best_index: Option<usize> = None;
+            let mut best_distance = f32::MAX;
 
-                for (idx, w) in state.wildlife.iter().enumerate() {
-                    if !matches!(w.species, Species::Dog | Species::Cat) {
-                        continue;
-                    }
-                    let dist = pos.distance_to(&w.position);
-                    if dist <= 2.0 && dist < best_distance {
-                        best_distance = dist;
-                        best_index = Some(idx);
+            for (idx, w) in state.wildlife.iter().enumerate() {
+                let species_name = w.species.name().to_lowercase();
+
+                let mut matches_target = species_name.contains(&t)
+                    || t.contains(&species_name)
+                    || t.contains("animal");
+
+                if !matches_target {
+                    if let Some(ref name) = w.name {
+                        let n = name.to_lowercase();
+                        if n.contains(&t) || t.contains(&n) {
+                            matches_target = true;
+                        }
                     }
                 }
 
-                let idx = match best_index {
-                    Some(i) => i,
-                    None => {
-                        return InteractionResult::Failure(
-                            "You don't see a dog or cat close enough to feed.".to_string(),
-                        )
-                    }
-                };
+                if !matches_target {
+                    continue;
+                }
 
-                if !state.player.inventory.remove(&item, 1) {
+                let dist = pos.distance_to(&w.position);
+                if dist > 2.0 {
+                    continue;
+                }
+
+                if w.position == pos && same_tile_index.is_none() {
+                    same_tile_index = Some(idx);
+                }
+
+                if dist < best_distance {
+                    best_distance = dist;
+                    best_index = Some(idx);
+                }
+            }
+
+            let idx = if let Some(i) = same_tile_index {
+                Some(i)
+            } else {
+                best_index
+            };
+
+            let idx = match idx {
+                Some(i) => i,
+                None => {
                     return InteractionResult::Failure(
-                        "You don't have any food to offer right now.".to_string(),
-                    );
+                        "You don't see any such animal close enough to feed.".to_string(),
+                    )
                 }
+            };
 
-                if let Some(w) = state.wildlife.get_mut(idx) {
-                    w.tamed = true;
-                }
-
-                state.player.modify_mood(4.0);
-
-                let animal_name = state.wildlife.get(idx).map(|w| w.species.name()).unwrap_or("animal");
-                let message = format!(
-                    "You offer the {}. The {} eats gratefully and falls into step beside you.",
-                    item.name(),
-                    animal_name
+            if !state.player.inventory.remove(&item, 1) {
+                return InteractionResult::Failure(
+                    "You don't have any food to offer right now.".to_string(),
                 );
+            }
+
+            if let Some(w) = state.wildlife.get_mut(idx) {
+                let is_companion = matches!(w.species, Species::Dog | Species::Cat);
+                if is_companion {
+                    w.tamed = true;
+                    state.player.modify_mood(4.0);
+                } else {
+                    state.player.modify_mood(1.0);
+                }
+
+                let label = w.display_name();
+                let message = if is_companion {
+                    format!(
+                        "You offer the {}. {} eats gratefully and falls into step beside you.",
+                        item.name(),
+                        label
+                    )
+                } else {
+                    format!(
+                        "You offer the {}. {} accepts the food for a moment, then drifts back to its own concerns.",
+                        item.name(),
+                        label
+                    )
+                };
 
                 return InteractionResult::ActionSuccess {
                     message,
@@ -1111,6 +1356,10 @@ pub fn try_use(
                     energy_cost: 1.0,
                 };
             }
+
+            return InteractionResult::Failure(
+                "Something about feeding that animal goes strangely wrong.".to_string(),
+            );
         }
     }
 

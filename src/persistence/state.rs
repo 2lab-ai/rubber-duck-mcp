@@ -284,10 +284,11 @@ impl GameState {
 
         let killed = w.body.is_vital_broken();
         if killed {
-            // Spawn a corpse object at this position and remove the living wildlife entry
+            let body_snapshot = w.body.clone();
             let corpse = WorldObject::new(ObjectKind::Corpse(Corpse {
                 species: w.species,
                 freshness: 0,
+                body: Some(body_snapshot),
             }));
             let id = format!("corpse-{}-{}", name, self.objects.placed.len());
             self.objects.add(id, w.position, corpse);
@@ -514,6 +515,8 @@ impl GameState {
                 "Books, maps and strange objects in the cabin hint at deeper systems. Not all of them explain themselves immediately.",
                 "If you feel lost, look around, meditate by the lake, or talk to the rubber duck. Sometimes the quiet answers first.",
                 "On the path just south of the cabin, you may notice a small carcass and a simple knife nearby. When you feel ready, stand by the carcass, 'take knife', then 'use knife on carcass' (or 'use knife on pig') to practice butchering and carry the meat inside to cook over the hearth.",
+                "You can use 'examine self' any time to check your condition. 'examine pig' or 'examine deer' will show how injured nearby animals are (and if several share your tile, they'll all be listed), and standing on a carcass then typing 'examine corpse' will show which parts were hurt the most.",
+                "If a dog or cat learns to trust you enough to follow you, you can give it a proper name with commands like 'name dog 멍멍이' or 'name cat 나비' while it is nearby.",
             ],
             false,
         );
@@ -944,6 +947,7 @@ impl GameState {
             let corpse = WorldObject::new(ObjectKind::Corpse(Corpse {
                 species: Species::Pig,
                 freshness: 0,
+                body: None,
             }));
             self.objects.add("starter_pig", pig_pos, corpse);
         }
@@ -1574,6 +1578,46 @@ impl GameState {
         self.custom_name(item)
             .map(|s| s.to_string())
             .unwrap_or_else(|| item.name().to_string())
+    }
+
+    pub fn name_companion(&mut self, target: &str, new_name: &str) -> Result<String, String> {
+        let norm = target.to_lowercase();
+        let pos = self.player.position;
+        let mut best_idx: Option<usize> = None;
+        let mut best_dist = f32::MAX;
+
+        for (idx, w) in self.wildlife.iter().enumerate() {
+            if !w.tamed {
+                continue;
+            }
+            let species_name = w.species.name().to_lowercase();
+            if !species_name.contains(&norm) && !norm.contains(&species_name) {
+                continue;
+            }
+            let dist = pos.distance_to(&w.position);
+            if dist <= 6.0 && dist < best_dist {
+                best_dist = dist;
+                best_idx = Some(idx);
+            }
+        }
+
+        let idx = best_idx.ok_or_else(|| {
+            "You don't have a tamed companion like that nearby.".to_string()
+        })?;
+
+        let trimmed = new_name.trim();
+        if trimmed.is_empty() {
+            return Err("Please provide a non-empty name.".to_string());
+        }
+        let capped = trimmed.chars().take(32).collect::<String>();
+
+        if let Some(w) = self.wildlife.get_mut(idx) {
+            w.name = Some(capped.clone());
+            let species_name = w.species.name();
+            return Ok(format!("You name your {} '{}'.", species_name, capped));
+        }
+
+        Err("Something went wrong while naming that companion.".to_string())
     }
 
     pub fn player_can_access_item(&self, item: &Item) -> bool {
